@@ -8,7 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default:
+        primary:
           "bg-primary text-primary-foreground shadow-token-md hover:opacity-90",
         secondary:
           "bg-secondary text-secondary-foreground border border-border hover:bg-muted",
@@ -16,54 +16,146 @@ const buttonVariants = cva(
           "border border-border bg-transparent text-foreground hover:bg-muted",
         ghost:
           "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-        destructive:
+        danger:
           "bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20",
-        link: "text-primary underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
         sm: "h-8 px-3 text-xs",
-        default: "h-10 px-4",
+        md: "h-10 px-4",
         lg: "h-12 px-6 text-base",
-        xl: "h-14 px-8 text-base font-semibold",
-        icon: "h-10 w-10",
-        "icon-sm": "h-8 w-8",
+        icon: "h-10 w-10 p-0",
       },
     },
-    defaultVariants: { variant: "default", size: "default" },
+    defaultVariants: { variant: "primary", size: "md" },
   }
 );
 
+function ButtonSpinner({ className }: { className?: string }) {
+  return (
+    <svg
+      className={cn("h-4 w-4 animate-spin", className)}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+      />
+    </svg>
+  );
+}
+
+type LegacyVariant = "default" | "destructive" | "link";
+type LegacySize = "default" | "xl" | "icon-sm";
+
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children">,
+    Omit<VariantProps<typeof buttonVariants>, "variant" | "size"> {
+  variant?: VariantProps<typeof buttonVariants>["variant"] | LegacyVariant;
+  size?: VariantProps<typeof buttonVariants>["size"] | LegacySize;
+  children?: React.ReactNode;
   asChild?: boolean;
+  /** @deprecated Use `isLoading` */
   loading?: boolean;
+  isLoading?: boolean;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+  /** Accessible label when the button has no visible text (icon-only). */
+  iconLabel?: string;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading, children, disabled, ...props }, ref) => {
+  (
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      loading,
+      isLoading: isLoadingProp,
+      leftIcon,
+      rightIcon,
+      iconLabel,
+      children,
+      disabled,
+      type = "button",
+      ...props
+    },
+    ref
+  ) => {
+    const isLoading = isLoadingProp ?? loading ?? false;
+    const isDisabled = disabled || isLoading;
     const Comp = asChild ? Slot : "button";
+
+    const resolvedVariant =
+      variant === "default" || variant === "destructive" || variant === "link"
+        ? variant === "destructive"
+          ? "danger"
+          : variant === "link"
+            ? "ghost"
+            : "primary"
+        : variant;
+
+    const resolvedSize =
+      size === "default"
+        ? "md"
+        : size === "xl"
+          ? "lg"
+          : size === "icon-sm"
+            ? "icon"
+            : size;
+
+    const isIconOnly =
+      resolvedSize === "icon" ||
+      (!children && !leftIcon && !rightIcon && Boolean(iconLabel));
+
+    const content = isLoading ? (
+      <>
+        <ButtonSpinner />
+        <span className="sr-only">Loading</span>
+      </>
+    ) : (
+      <>
+        {leftIcon && (
+          <span className="inline-flex shrink-0" aria-hidden="true">
+            {leftIcon}
+          </span>
+        )}
+        {children}
+        {rightIcon && (
+          <span className="inline-flex shrink-0" aria-hidden="true">
+            {rightIcon}
+          </span>
+        )}
+      </>
+    );
+
     return (
       <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+        type={asChild ? undefined : type}
+        className={cn(
+          buttonVariants({ variant: resolvedVariant, size: resolvedSize, className }),
+          isIconOnly && "gap-0"
+        )}
         ref={ref}
-        disabled={disabled || loading}
+        disabled={isDisabled}
+        aria-busy={isLoading || undefined}
+        aria-disabled={isDisabled || undefined}
+        aria-label={isIconOnly ? iconLabel : props["aria-label"]}
         {...props}
       >
-        {loading ? (
-          <svg
-            className="h-4 w-4 animate-spin"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            aria-hidden
-          >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        ) : (
-          children
-        )}
+        {content}
       </Comp>
     );
   }
