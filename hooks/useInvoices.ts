@@ -26,7 +26,7 @@ export function mapSortByToSort(sortBy: string): MarketplaceSort {
   }
 }
 
-export function useInvoices() {
+export function useInvoices(opts?: { refetchInterval?: number }) {
   const { filters, sortBy } = useInvoiceStore();
   const sort = mapSortByToSort(sortBy);
 
@@ -34,6 +34,7 @@ export function useInvoices() {
     queryKey: ["invoices", filters, sort],
     queryFn: () => fetchInvoices(filters, sort),
     staleTime: 30_000,
+    refetchInterval: opts?.refetchInterval,
   });
 }
 

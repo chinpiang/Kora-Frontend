@@ -87,6 +87,23 @@ export async function fetchInvoicesByOwner(ownerAddress: string): Promise<Invoic
   throw new Error("Live data fetch not yet implemented");
 }
 
+export async function fetchPositions(investorAddress: string) {
+  if (USE_MOCK) {
+    // Build mock positions from MOCK_INVOICES for the demo
+    const positions = MOCK_INVOICES.slice(0, 6).map((inv, i) => ({
+      invoiceId: inv.id,
+      invoice: inv,
+      investedAmount: [15000, 50000, 5000, 100000, 25000, 8000][i % 6],
+      expectedReturn: ([15000, 50000, 5000, 100000, 25000, 8000][i % 6]) * (1 + inv.terms.discountRate),
+      yieldEarned: 0,
+      investedAt: new Date().toISOString(),
+      status: inv.status === "repaid" ? "repaid" : "active",
+    }));
+    return positions;
+  }
+  throw new Error("Live positions fetch not yet implemented");
+}
+
 // ─── Write Operations ─────────────────────────────────────────────────────────
 
 /**
@@ -206,4 +223,26 @@ export async function submitAndConfirm(signedXdr: string): Promise<string> {
   const confirmed = await waitForTransaction(result.hash);
   if (confirmed.status !== "SUCCESS") throw new Error("Transaction failed on-chain");
   return result.hash;
+}
+
+/**
+ * Prepare repay transaction for an invoice (returns unsigned XDR)
+ */
+export async function prepareRepayInvoice(tokenId: string, ownerAddress: string): Promise<string> {
+  if (USE_MOCK) {
+    return `mock_unsigned_xdr_repay_invoice_${tokenId}_${ownerAddress}`;
+  }
+  const tx = await marketplaceContract.repayInvoice(BigInt(tokenId), ownerAddress);
+  return tx.toXDR();
+}
+
+/**
+ * Prepare claim transaction for an investor position (returns unsigned XDR)
+ */
+export async function prepareClaimPosition(positionId: string, investorAddress: string): Promise<string> {
+  if (USE_MOCK) {
+    return `mock_unsigned_xdr_claim_position_${positionId}_${investorAddress}`;
+  }
+  // TODO: implement on-chain claim via marketplace/positions contract when available
+  throw new Error("Claim on-chain not implemented");
 }

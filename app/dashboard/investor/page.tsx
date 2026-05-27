@@ -11,6 +11,9 @@ import { DataTable } from "@/components/ui/data-table";
 import { useWallet } from "@/hooks/useWallet";
 import { useUIStore } from "@/store";
 import { MOCK_INVOICES } from "@/services/mockData";
+import usePositions from "@/hooks/usePositions";
+import { useTransaction } from "@/hooks/useTransaction";
+import { prepareClaimPosition } from "@/services/invoiceService";
 import {
   formatCurrency,
   formatDate,
@@ -27,6 +30,7 @@ interface InvestorPosition {
   expectedReturn: number;
 }
 
+// Keep a small mock fallback but prefer hook data
 const POSITIONS: InvestorPosition[] = MOCK_INVOICES.slice(0, 4).map((inv, i) => ({
   id: inv.id,
   invoice: inv,
@@ -34,101 +38,7 @@ const POSITIONS: InvestorPosition[] = MOCK_INVOICES.slice(0, 4).map((inv, i) => 
   expectedReturn: [15000, 50000, 5000, 100000][i] * (1 + inv.terms.discountRate),
 }));
 
-const POSITION_COLUMNS: ColumnDef<InvestorPosition>[] = [
-  {
-    id: "invoice",
-    header: "Invoice",
-    accessor: (row) => row.invoice.metadata.invoiceNumber,
-    cell: (row) => (
-      <div>
-        <p className="font-medium text-foreground">{row.invoice.metadata.invoiceNumber}</p>
-        <p className="text-xs text-muted-foreground">{row.invoice.metadata.category}</p>
-      </div>
-    ),
-  },
-  {
-    id: "debtor",
-    header: "Debtor",
-    accessor: (row) => row.invoice.metadata.debtorName,
-    cell: (row) => <span className="text-muted-foreground">{row.invoice.metadata.debtorName}</span>,
-  },
-  {
-    id: "invested",
-    header: "Invested",
-    accessor: (row) => row.investedAmount,
-    cell: (row) => (
-      <span className="font-medium text-foreground">
-        {formatCurrency(row.investedAmount, "USDC", true)}
-      </span>
-    ),
-  },
-  {
-    id: "expected",
-    header: "Expected Return",
-    accessor: (row) => row.expectedReturn,
-    cell: (row) => (
-      <span className="font-medium text-success">
-        {formatCurrency(row.expectedReturn, "USDC", true)}
-      </span>
-    ),
-  },
-  {
-    id: "yield",
-    header: "Yield",
-    accessor: (row) => row.expectedReturn - row.investedAmount,
-    cell: (row) => (
-      <span className="text-primary">
-        +{formatCurrency(row.expectedReturn - row.investedAmount, "USDC", true)}
-      </span>
-    ),
-  },
-  {
-    id: "apr",
-    header: "APR",
-    accessor: (row) => row.invoice.terms.apr,
-    cell: (row) => (
-      <span className="font-medium text-primary">{formatApr(row.invoice.terms.apr)}</span>
-    ),
-  },
-  {
-    id: "risk",
-    header: "Risk",
-    accessor: (row) => row.invoice.riskTier,
-    cell: (row) => (
-      <span
-        className={cn(
-          "rounded-md border px-2 py-0.5 text-xs font-semibold",
-          RISK_TIER_COLORS[row.invoice.riskTier]
-        )}
-      >
-        {row.invoice.riskTier}
-      </span>
-    ),
-  },
-  {
-    id: "due",
-    header: "Due Date",
-    accessor: (row) => row.invoice.terms.repaymentDate,
-    cell: (row) => (
-      <span className="text-xs text-muted-foreground">
-        {formatDate(row.invoice.terms.repaymentDate)}
-      </span>
-    ),
-  },
-  {
-    id: "actions",
-    header: "",
-    sortable: false,
-    cell: (row) => (
-      <Link
-        href={`/marketplace/${row.invoice.id}`}
-        className="text-xs text-primary hover:opacity-80"
-      >
-        View →
-      </Link>
-    ),
-  },
-];
+// POSITION_COLUMNS will be built inside the component so actions can reference handlers
 
 const totalInvested = POSITIONS.reduce((s, p) => s + p.investedAmount, 0);
 const totalExpected = POSITIONS.reduce((s, p) => s + p.expectedReturn, 0);
@@ -166,6 +76,9 @@ const STATS = [
 export default function InvestorDashboardPage() {
   const { isConnected } = useWallet();
   const { setWalletModalOpen } = useUIStore();
+  const { address } = useWallet();
+  const positionsQuery = usePositions(address, { refetchInterval: 30_000 });
+  const { execute } = useTransaction();
 
   if (!isConnected) {
     return (
@@ -179,6 +92,97 @@ export default function InvestorDashboardPage() {
       </div>
     );
   }
+
+  const handleClaim = async (pos: InvestorPosition) => {
+    if (!address) return;
+    await execute(() => prepareClaimPosition(pos.id, address), {
+      successMessage: "Claim submitted",
+      onSuccess: () => positionsQuery.refetch(),
+    });
+  };
+
+  const POSITION_COLUMNS: ColumnDef<InvestorPosition>[] = [
+    {
+      id: "invoice",
+      header: "Invoice",
+      accessor: (row) => row.invoice.metadata.invoiceNumber,
+      cell: (row) => (
+        <div>
+          <p className="font-medium text-foreground">{row.invoice.metadata.invoiceNumber}</p>
+          <p className="text-xs text-muted-foreground">{row.invoice.metadata.category}</p>
+        </div>
+      ),
+    },
+    {
+      id: "debtor",
+      header: "Debtor",
+      accessor: (row) => row.invoice.metadata.debtorName,
+      cell: (row) => <span className="text-muted-foreground">{row.invoice.metadata.debtorName}</span>,
+    },
+    {
+      id: "invested",
+      header: "Invested",
+      accessor: (row) => row.investedAmount,
+      cell: (row) => (
+        <span className="font-medium text-foreground">{formatCurrency(row.investedAmount, "USDC", true)}</span>
+      ),
+    },
+    {
+      id: "expected",
+      header: "Expected Return",
+      accessor: (row) => row.expectedReturn,
+      cell: (row) => (
+        <span className="font-medium text-success">{formatCurrency(row.expectedReturn, "USDC", true)}</span>
+      ),
+    },
+    {
+      id: "yield",
+      header: "Yield",
+      accessor: (row) => row.expectedReturn - row.investedAmount,
+      cell: (row) => <span className="text-primary">+{formatCurrency(row.expectedReturn - row.investedAmount, "USDC", true)}</span>,
+    },
+    {
+      id: "apr",
+      header: "APR",
+      accessor: (row) => row.invoice.terms.apr,
+      cell: (row) => <span className="font-medium text-primary">{formatApr(row.invoice.terms.apr)}</span>,
+    },
+    {
+      id: "risk",
+      header: "Risk",
+      accessor: (row) => row.invoice.riskTier,
+      cell: (row) => (
+        <span className={cn("rounded-md border px-2 py-0.5 text-xs font-semibold", RISK_TIER_COLORS[row.invoice.riskTier])}>
+          {row.invoice.riskTier}
+        </span>
+      ),
+    },
+    {
+      id: "due",
+      header: "Due Date",
+      accessor: (row) => row.invoice.terms.repaymentDate,
+      cell: (row) => <span className="text-xs text-muted-foreground">{formatDate(row.invoice.terms.repaymentDate)}</span>,
+    },
+    {
+      id: "actions",
+      header: "",
+      sortable: false,
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          {row.status === "repaid" ? (
+            <Button size="sm" onClick={() => handleClaim(row)}>
+              Claim
+            </Button>
+          ) : null}
+          <Link href={`/marketplace/${row.invoice.id}`} className="text-xs text-primary hover:opacity-80">
+            View →
+          </Link>
+        </div>
+      ),
+    },
+  ];
+
+  const positionsData = positionsQuery.data || POSITIONS;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
@@ -213,7 +217,7 @@ export default function InvestorDashboardPage() {
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
           <DataTable
-            data={POSITIONS}
+            data={positionsData}
             columns={POSITION_COLUMNS}
             pageSize={5}
             emptyState={{
