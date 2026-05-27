@@ -8,6 +8,7 @@ export type InvoiceCreateDraft = Partial<InvoiceDetailsStepSchema> & {
   issueDate?: string;
   discountRate?: number;
   minInvestment?: number;
+  listingExpiryDate?: string;
   description?: string;
 };
 
@@ -42,13 +43,11 @@ export const useInvoiceStore = create<InvoiceStore>()(
       selectedInvoice: null,
 
       createDraft: { currency: "USDC" },
-      setCreateDraft: (draft) =>
-        set((s) => ({ createDraft: { ...s.createDraft, ...draft } })),
+      setCreateDraft: (draft) => set((s) => ({ createDraft: { ...s.createDraft, ...draft } })),
       clearCreateDraft: () => set({ createDraft: { currency: "USDC" } }),
 
       setInvoices: (invoices) => set({ invoices }),
-      setFilters: (filters) =>
-        set((s) => ({ filters: { ...s.filters, ...filters } })),
+      setFilters: (filters) => set((s) => ({ filters: { ...s.filters, ...filters } })),
       resetFilters: () => set({ filters: {}, searchQuery: "" }),
       setSort: (sort) => set({ sort }),
       setSearchQuery: (searchQuery) => set({ searchQuery }),
