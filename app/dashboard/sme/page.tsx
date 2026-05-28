@@ -9,6 +9,9 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Progress } from "@/components/ui/progress";
 import { DataTable } from "@/components/ui/data-table";
 import { useWallet } from "@/hooks/useWallet";
+import { useInvoices } from "@/hooks/useInvoices";
+import { useTransaction } from "@/hooks/useTransaction";
+import { prepareRepayInvoice } from "@/services/invoiceService";
 import { useUIStore } from "@/store";
 import { MOCK_INVOICES } from "@/services/mockData";
 import {
@@ -21,128 +24,12 @@ import {
 import type { Invoice } from "@/types";
 import type { ColumnDef } from "@/types/table";
 
-const MY_INVOICES = MOCK_INVOICES.slice(0, 3);
-
-const INVOICE_COLUMNS: ColumnDef<Invoice>[] = [
-  {
-    id: "invoice",
-    header: "Invoice",
-    accessor: (row) => row.metadata.invoiceNumber,
-    cell: (row) => (
-      <div>
-        <p className="font-medium text-foreground">{row.metadata.invoiceNumber}</p>
-        <p className="text-xs text-muted-foreground">{row.metadata.category}</p>
-      </div>
-    ),
-  },
-  {
-    id: "debtor",
-    header: "Debtor",
-    accessor: (row) => row.metadata.debtorName,
-    cell: (row) => <span className="text-muted-foreground">{row.metadata.debtorName}</span>,
-  },
-  {
-    id: "amount",
-    header: "Amount",
-    accessor: (row) => row.metadata.amount,
-    cell: (row) => (
-      <span className="font-medium text-foreground">
-        {formatCurrency(row.metadata.amount, row.metadata.currency, true)}
-      </span>
-    ),
-  },
-  {
-    id: "apr",
-    header: "APR",
-    accessor: (row) => row.terms.apr,
-    cell: (row) => <span className="font-medium text-primary">{formatApr(row.terms.apr)}</span>,
-  },
-  {
-    id: "progress",
-    header: "Progress",
-    accessor: (row) => row.funding.fundingProgress,
-    cell: (row) => (
-      <div className="w-32 space-y-1">
-        <Progress value={row.funding.fundingProgress * 100} className="h-1.5" />
-        <p className="text-xs text-muted-foreground">
-          {Math.round(row.funding.fundingProgress * 100)}%
-        </p>
-      </div>
-    ),
-  },
-  {
-    id: "status",
-    header: "Status",
-    accessor: (row) => row.status,
-    cell: (row) => (
-      <span className={cn("rounded-md px-2 py-0.5 text-xs capitalize", STATUS_COLORS[row.status])}>
-        {row.status.replace(/_/g, " ")}
-      </span>
-    ),
-  },
-  {
-    id: "due",
-    header: "Due Date",
-    accessor: (row) => row.terms.repaymentDate,
-    cell: (row) => (
-      <span className="text-xs text-muted-foreground">{formatDate(row.terms.repaymentDate)}</span>
-    ),
-  },
-  {
-    id: "actions",
-    header: "",
-    sortable: false,
-    cell: (row) => (
-      <Link href={`/marketplace/${row.id}`} className="text-xs text-primary hover:opacity-80">
-        View →
-      </Link>
-    ),
-  },
-];
-
-const STATS = [
-  {
-    label: "Total Financed",
-    value: formatCurrency(
-      MY_INVOICES.reduce((s, i) => s + i.funding.totalRaised, 0),
-      "USDC",
-      true
-    ),
-    change: "12.4% this month",
-    changePositive: true,
-    icon: <TrendingUp className="h-4 w-4" />,
-  },
-  {
-    label: "Active Invoices",
-    value: MY_INVOICES.filter((i) =>
-      ["listed", "partially_funded", "fully_funded"].includes(i.status)
-    ).length.toString(),
-    icon: <FileText className="h-4 w-4" />,
-  },
-  {
-    label: "Pending Repayment",
-    value: formatCurrency(
-      MY_INVOICES.filter((i) => i.status === "fully_funded").reduce(
-        (s, i) => s + i.metadata.amount,
-        0
-      ),
-      "USDC",
-      true
-    ),
-    icon: <Clock className="h-4 w-4" />,
-  },
-  {
-    label: "Repayment Rate",
-    value: "100%",
-    change: "All-time",
-    changePositive: true,
-    icon: <CheckCircle2 className="h-4 w-4" />,
-  },
-];
 
 export default function SMEDashboardPage() {
-  const { isConnected } = useWallet();
+  const { isConnected, address } = useWallet();
   const { setWalletModalOpen } = useUIStore();
+  const invoicesQuery = useInvoices({ refetchInterval: 30_000 });
+  const { execute } = useTransaction();
 
   if (!isConnected) {
     return (
@@ -156,6 +43,52 @@ export default function SMEDashboardPage() {
       </div>
     );
   }
+  const myInvoices: Invoice[] = (invoicesQuery.data?.data || MOCK_INVOICES).filter(
+    (i) => i.ownerAddress === address
+  );
+
+  const STATS = [
+    {
+      label: "Total Financed",
+      value: formatCurrency(
+        myInvoices.reduce((s, i) => s + i.funding.totalRaised, 0),
+        "USDC",
+        true
+      ),
+      change: "12.4% this month",
+      changePositive: true,
+      icon: <TrendingUp className="h-4 w-4" />,
+    },
+    {
+      label: "Active Invoices",
+      value: myInvoices.filter((i) => ["listed", "partially_funded", "fully_funded"].includes(i.status)).length.toString(),
+      icon: <FileText className="h-4 w-4" />,
+    },
+    {
+      label: "Pending Repayment",
+      value: formatCurrency(
+        myInvoices.filter((i) => i.status === "fully_funded").reduce((s, i) => s + i.metadata.amount, 0),
+        "USDC",
+        true
+      ),
+      icon: <Clock className="h-4 w-4" />,
+    },
+    {
+      label: "Repayment Rate",
+      value: "100%",
+      change: "All-time",
+      changePositive: true,
+      icon: <CheckCircle2 className="h-4 w-4" />,
+    },
+  ];
+
+  const handleRepay = async (inv: Invoice) => {
+    if (!address) return;
+    await execute(() => prepareRepayInvoice(inv.tokenId, address), {
+      successMessage: "Repayment submitted",
+      onSuccess: () => invoicesQuery.refetch(),
+    });
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
@@ -190,8 +123,102 @@ export default function SMEDashboardPage() {
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
           <DataTable
-            data={MY_INVOICES}
-            columns={INVOICE_COLUMNS}
+            data={myInvoices}
+            columns={(() => {
+              const cols: ColumnDef<Invoice>[] = [
+                {
+                  id: "invoice",
+                  header: "Invoice",
+                  accessor: (row) => row.metadata.invoiceNumber,
+                  cell: (row) => (
+                    <div>
+                      <p className="font-medium text-foreground">{row.metadata.invoiceNumber}</p>
+                      <p className="text-xs text-muted-foreground">{row.metadata.category}</p>
+                    </div>
+                  ),
+                },
+                {
+                  id: "debtor",
+                  header: "Debtor",
+                  accessor: (row) => row.metadata.debtorName,
+                  cell: (row) => <span className="text-muted-foreground">{row.metadata.debtorName}</span>,
+                },
+                {
+                  id: "amount",
+                  header: "Amount",
+                  accessor: (row) => row.metadata.amount,
+                  cell: (row) => (
+                    <span className="font-medium text-foreground">
+                      {formatCurrency(row.metadata.amount, row.metadata.currency, true)}
+                    </span>
+                  ),
+                },
+                {
+                  id: "apr",
+                  header: "APR",
+                  accessor: (row) => row.terms.apr,
+                  cell: (row) => <span className="font-medium text-primary">{formatApr(row.terms.apr)}</span>,
+                },
+                {
+                  id: "progress",
+                  header: "Progress",
+                  accessor: (row) => row.funding.fundingProgress,
+                  cell: (row) => (
+                    <div className="w-32 space-y-1">
+                      <Progress value={row.funding.fundingProgress * 100} className="h-1.5" />
+                      <p className="text-xs text-muted-foreground">{Math.round(row.funding.fundingProgress * 100)}%</p>
+                    </div>
+                  ),
+                },
+                {
+                  id: "status",
+                  header: "Status",
+                  accessor: (row) => row.status,
+                  cell: (row) => (
+                    <span className={cn("rounded-md px-2 py-0.5 text-xs capitalize", STATUS_COLORS[row.status])}>
+                      {row.status.replace(/_/g, " ")}
+                    </span>
+                  ),
+                },
+                {
+                  id: "due",
+                  header: "Due Date",
+                  accessor: (row) => row.terms.repaymentDate,
+                  cell: (row) => (
+                    <span className="text-xs text-muted-foreground">{formatDate(row.terms.repaymentDate)}</span>
+                  ),
+                },
+                {
+                  id: "actions",
+                  header: "",
+                  sortable: false,
+                  cell: (row) => {
+                    const isDue = new Date(row.terms.repaymentDate) <= new Date();
+                    const canRepay = row.status === "fully_funded" && isDue;
+                    const canCancel = row.status === "listed" || row.status === "pending_mint";
+
+                    return (
+                      <div className="flex items-center gap-2">
+                        {canRepay && (
+                          <Button size="sm" onClick={() => handleRepay(row)}>
+                            Repay
+                          </Button>
+                        )}
+                        {canCancel && (
+                          <Button size="sm" variant="ghost">
+                            Cancel
+                          </Button>
+                        )}
+                        <Link href={`/marketplace/${row.id}`} className="text-xs text-primary hover:opacity-80">
+                          View →
+                        </Link>
+                      </div>
+                    );
+                  },
+                },
+              ];
+              return cols;
+            })()}
             pageSize={5}
             enableSelection
             bulkActions={
@@ -199,6 +226,7 @@ export default function SMEDashboardPage() {
                 Export selected
               </Button>
             }
+            isLoading={invoicesQuery.isLoading}
             emptyState={{
               title: "No invoices yet",
               message: "Create your first invoice to start raising liquidity.",
@@ -208,7 +236,7 @@ export default function SMEDashboardPage() {
         </CardContent>
       </Card>
 
-      {MY_INVOICES.some((i) => i.status === "fully_funded") && (
+      {myInvoices.some((i) => i.status === "fully_funded") && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

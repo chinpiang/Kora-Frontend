@@ -87,6 +87,23 @@ export async function fetchInvoicesByOwner(ownerAddress: string): Promise<Invoic
   throw new Error("Live data fetch not yet implemented");
 }
 
+export async function fetchPositions(investorAddress: string) {
+  if (USE_MOCK) {
+    // Build mock positions from MOCK_INVOICES for the demo
+    const positions = MOCK_INVOICES.slice(0, 6).map((inv, i) => ({
+      invoiceId: inv.id,
+      invoice: inv,
+      investedAmount: [15000, 50000, 5000, 100000, 25000, 8000][i % 6],
+      expectedReturn: ([15000, 50000, 5000, 100000, 25000, 8000][i % 6]) * (1 + inv.terms.discountRate),
+      yieldEarned: 0,
+      investedAt: new Date().toISOString(),
+      status: inv.status === "repaid" ? "repaid" : "active",
+    }));
+    return positions;
+  }
+  throw new Error("Live positions fetch not yet implemented");
+}
+
 // ─── Write Operations ─────────────────────────────────────────────────────────
 
 /**

@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useMemo, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -22,6 +23,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useUIStore } from "@/store";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+import { exportCsv } from "@/lib/utils";
 
 // ── Mock analytics data ────────────────────────────────────────────────────────
 
@@ -103,6 +105,13 @@ const TOOLTIP_STYLE = {
 export default function PortfolioAnalyticsPage() {
   const { isConnected } = useWallet();
   const { setWalletModalOpen } = useUIStore();
+  const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
+
+  // Simple date range filtering for mock data — in real app you'd slice by timestamps
+  const portfolio = useMemo(() => PORTFOLIO_HISTORY, [range]);
+  const yieldData = useMemo(() => YIELD_HISTORY, [range]);
+  const risk = useMemo(() => RISK_DISTRIBUTION, [range]);
+  const monthly = useMemo(() => MONTHLY_RETURNS, [range]);
 
   if (!isConnected) {
     return (
@@ -122,6 +131,35 @@ export default function PortfolioAnalyticsPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-zinc-100">Portfolio Analytics</h1>
         <p className="mt-1 text-sm text-zinc-500">Performance overview of your invoice financing portfolio</p>
+      </div>
+
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-zinc-400">Range:</span>
+          {(["7d", "30d", "90d", "all"] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`rounded-md px-2 py-1 text-sm ${range === r ? "bg-zinc-700 text-white" : "text-zinc-400"}`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-md bg-zinc-800 px-3 py-1 text-sm text-zinc-200"
+            onClick={() => exportCsv(portfolio as any, "portfolio.csv")}
+          >
+            Export Portfolio CSV
+          </button>
+          <button
+            className="rounded-md bg-zinc-800 px-3 py-1 text-sm text-zinc-200"
+            onClick={() => exportCsv(yieldData as any, "yield.csv")}
+          >
+            Export Yield CSV
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
