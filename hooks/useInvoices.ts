@@ -1,47 +1,150 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useInvoiceStore } from "@/store";
-import { fetchInvoices, fetchInvoiceById } from "@/services/invoiceService";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import { useInvoiceStore } from "@/store/invoiceStore";
+import {
+  fetchInvoices,
+  fetchInvoiceById,
+  fetchInvoicesByOwner,
+  fetchInvestorPositions,
+  prepareCreateInvoice,
+  prepareFundInvoice,
+} from "@/services/invoiceService";
+import type { CreateInvoiceFormData, MarketplaceSortKey } from "@/types";
 
-import type { MarketplaceSort } from "@/types";
+const STALE_30S = 30_000;
+const GC_5MIN = 5 * 60 * 1000;
 
-export function mapSortByToSort(sortBy: string): MarketplaceSort {
-  switch (sortBy) {
-    case "apr_asc":
-      return { key: "apr", direction: "asc" };
-    case "amount_desc":
-      return { key: "amount", direction: "desc" };
-    case "amount_asc":
-      return { key: "amount", direction: "asc" };
-    case "due_soonest":
-      return { key: "duration", direction: "asc" };
-    case "due_latest":
-      return { key: "duration", direction: "desc" };
-    case "newest":
-      return { key: "createdAt", direction: "desc" };
-    case "apr_desc":
-    default:
-      return { key: "apr", direction: "desc" };
-  }
-}
+const SORT_KEY_MAP: Record<string, MarketplaceSortKey> = {
+  apr: "apr",
+  amount: "amount",
+  dueDate: "duration",
+  listed: "createdAt",
+};
 
-export function useInvoices() {
-  const { filters, sortBy } = useInvoiceStore();
-  const sort = mapSortByToSort(sortBy);
+// ─── List ─────────────────────────────────────────────────────────────────────
 
+export function useInvoices(page = 1) {
+  const { filters, sort } = useInvoiceStore();
   return useQuery({
-    queryKey: ["invoices", filters, sort],
-    queryFn: () => fetchInvoices(filters, sort),
-    staleTime: 30_000,
+    queryKey: queryKeys.invoices.list(filters, sort, page),
+    queryFn: () =>
+      fetchInvoices(
+        filters,
+        { key: SORT_KEY_MAP[sort.sortBy] ?? "apr", direction: sort.sortDir },
+        page
+      ),
+    staleTime: STALE_30S,
+    gcTime: GC_5MIN,
   });
 }
 
+// ─── Detail ───────────────────────────────────────────────────────────────────
+
 export function useInvoice(id: string) {
   return useQuery({
-    queryKey: ["invoice", id],
+    queryKey: queryKeys.invoices.detail(id),
     queryFn: () => fetchInvoiceById(id),
     enabled: !!id,
-    staleTime: 60_000,
+    staleTime: STALE_30S,
+    gcTime: GC_5MIN,
+  });
+}
+
+/** Call on InvoiceCard mouseEnter to warm the cache before navigation. */
+export function usePrefetchInvoice() {
+  const queryClient = useQueryClient();
+  return (id: string) =>
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.invoices.detail(id),
+      queryFn: () => fetchInvoiceById(id),
+      staleTime: STALE_30S,
+    });
+}
+
+// ─── SME invoices ─────────────────────────────────────────────────────────────
+
+export function useSMEInvoices(address: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.invoices.byOwner(address ?? ""),
+    queryFn: () => fetchInvoicesByOwner(address!),
+    enabled: !!address,
+    staleTime: STALE_30S,
+    refetchInterval: STALE_30S,
+    gcTime: GC_5MIN,
+  });
+}
+
+// ─── Investor positions ───────────────────────────────────────────────────────
+
+export function useInvestorPositions(address: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.invoices.positions(address ?? ""),
+    queryFn: () => fetchInvestorPositions(address!),
+    enabled: !!address,
+    staleTime: STALE_30S,
+    gcTime: GC_5MIN,
+  });
+}
+
+// ─── Create invoice mutation ──────────────────────────────────────────────────
+
+export function useInvoiceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      formData,
+      ownerAddress,
+      onProgress,
+    }: {
+      formData: CreateInvoiceFormData;
+      ownerAddress: string;
+      onProgress?: (p: number) => void;
+    }) => prepareCreateInvoice(formData, ownerAddress, onProgress),
+
+    onSuccess: () => {
+      // Invalidate all invoice lists so they refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+    },
+  });
+}
+
+// ─── Fund invoice mutation ────────────────────────────────────────────────────
+
+export function useFundInvoiceMutation() {
+  const queryClient = useQueryClient();
+  const { updateInvoiceFunding } = useInvoiceStore();
+
+  return useMutation({
+    mutationFn: ({
+      tokenId,
+      amount,
+      investorAddress,
+    }: {
+      tokenId: string;
+      amount: number;
+      investorAddress: string;
+    }) => prepareFundInvoice(tokenId, amount, investorAddress),
+
+    onMutate: async ({ tokenId, amount }) => {
+      // Optimistic update — immediately reflect new funding in the store
+      const { invoices } = useInvoiceStore.getState();
+      const invoice = invoices.find((i) => i.tokenId === tokenId);
+      if (invoice) {
+        updateInvoiceFunding(invoice.id, invoice.funding.totalRaised + amount);
+      }
+    },
+
+    onSettled: (_data, _err, { tokenId }) => {
+      // Refetch the specific invoice to sync server state
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.invoices.detail(tokenId),
+      });
+    },
   });
 }

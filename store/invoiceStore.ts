@@ -1,7 +1,22 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Invoice, MarketplaceFilters, MarketplaceSort } from "@/types";
+import type { Invoice } from "@/types";
 import type { InvoiceDetailsStepSchema } from "@/lib/validations/invoice";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface FilterState {
+  categories: string[];
+  jurisdictions: string[];
+  riskTiers: string[];
+  aprRange: [number, number];
+  activeOnly: boolean;
+}
+
+export interface SortState {
+  sortBy: "apr" | "amount" | "dueDate" | "listed";
+  sortDir: "asc" | "desc";
+}
 
 export type InvoiceCreateDraft = Partial<InvoiceDetailsStepSchema> & {
   currency?: "USDC" | "EURC" | "XLM";
@@ -12,7 +27,9 @@ export type InvoiceCreateDraft = Partial<InvoiceDetailsStepSchema> & {
   description?: string;
 };
 
-export const DEFAULT_FILTERS: MarketplaceFilters = {
+// ─── Defaults ─────────────────────────────────────────────────────────────────
+
+export const DEFAULT_FILTERS: FilterState = {
   categories: [],
   jurisdictions: [],
   riskTiers: [],
@@ -20,53 +37,175 @@ export const DEFAULT_FILTERS: MarketplaceFilters = {
   activeOnly: false,
 };
 
-const DEFAULT_SORT: MarketplaceSort = { key: "apr", direction: "desc" };
-const DEFAULT_SORT_BY = "apr_desc";
+const DEFAULT_SORT: SortState = { sortBy: "apr", sortDir: "desc" };
+
+// ─── Pure selector ────────────────────────────────────────────────────────────
+
+export function getFilteredInvoices(
+  invoices: Invoice[],
+  filters: FilterState,
+  sort: SortState,
+  searchQuery = ""
+): Invoice[] {
+  let result = invoices;
+
+  if (filters.categories.length > 0) {
+    result = result.filter((i) => filters.categories.includes(i.metadata.category));
+  }
+  if (filters.jurisdictions.length > 0) {
+    result = result.filter((i) => filters.jurisdictions.includes(i.metadata.jurisdiction));
+  }
+  if (filters.riskTiers.length > 0) {
+    result = result.filter((i) => filters.riskTiers.includes(i.riskTier));
+  }
+  const [minApr, maxApr] = filters.aprRange;
+  result = result.filter((i) => i.terms.apr >= minApr && i.terms.apr <= maxApr);
+  if (filters.activeOnly) {
+    result = result.filter((i) => i.status === "listed" || i.status === "partially_funded");
+  }
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    result = result.filter(
+      (i) =>
+        i.metadata.debtorName.toLowerCase().includes(q) ||
+        i.metadata.invoiceNumber.toLowerCase().includes(q)
+    );
+  }
+
+  return [...result].sort((a, b) => {
+    let aVal: number, bVal: number;
+    switch (sort.sortBy) {
+      case "apr":
+        aVal = a.terms.apr; bVal = b.terms.apr; break;
+      case "amount":
+        aVal = a.metadata.amount; bVal = b.metadata.amount; break;
+      case "dueDate":
+        aVal = new Date(a.metadata.dueDate).getTime();
+        bVal = new Date(b.metadata.dueDate).getTime();
+        break;
+      case "listed":
+      default:
+        aVal = new Date(a.createdAt).getTime();
+        bVal = new Date(b.createdAt).getTime();
+    }
+    return sort.sortDir === "asc" ? aVal - bVal : bVal - aVal;
+  });
+}
+
+// ─── URL serialization ────────────────────────────────────────────────────────
+
+export function toQueryParams(filters: FilterState, sort: SortState): URLSearchParams {
+  const p = new URLSearchParams();
+  if (filters.categories.length) p.set("categories", filters.categories.join(","));
+  if (filters.jurisdictions.length) p.set("jurisdictions", filters.jurisdictions.join(","));
+  if (filters.riskTiers.length) p.set("riskTiers", filters.riskTiers.join(","));
+  if (filters.aprRange[0] !== 0) p.set("aprMin", String(filters.aprRange[0]));
+  if (filters.aprRange[1] !== 50) p.set("aprMax", String(filters.aprRange[1]));
+  if (filters.activeOnly) p.set("activeOnly", "1");
+  if (sort.sortBy !== "apr") p.set("sortBy", sort.sortBy);
+  if (sort.sortDir !== "desc") p.set("sortDir", sort.sortDir);
+  return p;
+}
+
+export function fromQueryParams(params: URLSearchParams): {
+  filters: FilterState;
+  sort: SortState;
+} {
+  return {
+    filters: {
+      categories: params.get("categories")?.split(",").filter(Boolean) ?? [],
+      jurisdictions: params.get("jurisdictions")?.split(",").filter(Boolean) ?? [],
+      riskTiers: params.get("riskTiers")?.split(",").filter(Boolean) ?? [],
+      aprRange: [
+        Number(params.get("aprMin") ?? 0),
+        Number(params.get("aprMax") ?? 50),
+      ],
+      activeOnly: params.get("activeOnly") === "1",
+    },
+    sort: {
+      sortBy: (params.get("sortBy") as SortState["sortBy"]) ?? "apr",
+      sortDir: (params.get("sortDir") as SortState["sortDir"]) ?? "desc",
+    },
+  };
+}
+
+// ─── Store ────────────────────────────────────────────────────────────────────
 
 interface InvoiceStore {
   invoices: Invoice[];
-  filters: MarketplaceFilters;
-  sort: MarketplaceSort;
-  sortBy: string;
+  filters: FilterState;
+  sort: SortState;
   searchQuery: string;
   selectedInvoice: Invoice | null;
-
   createDraft: InvoiceCreateDraft;
+
+  // Actions
+  setInvoices: (invoices: Invoice[]) => void;
+  setFilters: (filters: Partial<FilterState>) => void;
+  resetFilters: () => void;
+  setSort: (sort: Partial<SortState>) => void;
+  setSearchQuery: (q: string) => void;
+  setSelectedInvoice: (invoice: Invoice | null) => void;
+  updateInvoiceFunding: (id: string, newAmount: number) => void;
   setCreateDraft: (draft: Partial<InvoiceCreateDraft>) => void;
   clearCreateDraft: () => void;
 
-  setInvoices: (invoices: Invoice[]) => void;
-  setFilters: (filters: Partial<MarketplaceFilters>) => void;
-  updateSingleFilter: (key: keyof MarketplaceFilters, value: any) => void;
-  resetFilters: () => void;
-  setSort: (sort: MarketplaceSort) => void;
-  setSortBy: (sortBy: string) => void;
-  setSearchQuery: (q: string) => void;
-  setSelectedInvoice: (invoice: Invoice | null) => void;
+  // Derived
+  getFiltered: () => Invoice[];
 }
 
 export const useInvoiceStore = create<InvoiceStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       invoices: [],
       filters: DEFAULT_FILTERS,
       sort: DEFAULT_SORT,
-      sortBy: DEFAULT_SORT_BY,
       searchQuery: "",
       selectedInvoice: null,
-
       createDraft: { currency: "USDC" },
-      setCreateDraft: (draft) => set((s) => ({ createDraft: { ...s.createDraft, ...draft } })),
-      clearCreateDraft: () => set({ createDraft: { currency: "USDC" } }),
 
       setInvoices: (invoices) => set({ invoices }),
-      setFilters: (filters) => set((s) => ({ filters: { ...s.filters, ...filters } })),
-      updateSingleFilter: (key, value) => set((s) => ({ filters: { ...s.filters, [key]: value } })),
-      resetFilters: () => set({ filters: DEFAULT_FILTERS, searchQuery: "" }),
-      setSort: (sort) => set({ sort }),
-      setSortBy: (sortBy) => set({ sortBy }),
+
+      setFilters: (filters) =>
+        set((s) => ({ filters: { ...s.filters, ...filters } })),
+
+      resetFilters: () =>
+        set({ filters: DEFAULT_FILTERS, searchQuery: "" }),
+
+      setSort: (sort) =>
+        set((s) => ({ sort: { ...s.sort, ...sort } })),
+
       setSearchQuery: (searchQuery) => set({ searchQuery }),
+
       setSelectedInvoice: (selectedInvoice) => set({ selectedInvoice }),
+
+      /** Optimistic update — instantly reflects new funding amount in UI */
+      updateInvoiceFunding: (id, newAmount) =>
+        set((s) => ({
+          invoices: s.invoices.map((inv) => {
+            if (inv.id !== id) return inv;
+            const totalRaised = Math.min(newAmount, inv.funding.targetAmount);
+            return {
+              ...inv,
+              funding: {
+                ...inv.funding,
+                totalRaised,
+                fundingProgress: totalRaised / inv.funding.targetAmount,
+                remainingCapacity: inv.funding.targetAmount - totalRaised,
+              },
+            };
+          }),
+        })),
+
+      setCreateDraft: (draft) =>
+        set((s) => ({ createDraft: { ...s.createDraft, ...draft } })),
+
+      clearCreateDraft: () => set({ createDraft: { currency: "USDC" } }),
+
+      getFiltered: () => {
+        const { invoices, filters, sort, searchQuery } = get();
+        return getFilteredInvoices(invoices, filters, sort, searchQuery);
+      },
     }),
     {
       name: "kora-invoice-store",

@@ -205,3 +205,19 @@ export async function submitAndConfirm(signedXdr: string): Promise<string> {
   if (confirmed.status !== "SUCCESS") throw new Error("Transaction failed on-chain");
   return result.hash;
 }
+
+export async function fetchInvestorPositions(investorAddress: string): Promise<import("@/types").InvoicePosition[]> {
+  if (USE_MOCK) {
+    // Return mock positions derived from mock invoices
+    return MOCK_INVOICES.slice(0, 2).map((invoice) => ({
+      invoiceId: invoice.id,
+      invoice,
+      investedAmount: 1000,
+      expectedReturn: 1050,
+      yieldEarned: 0,
+      investedAt: new Date().toISOString(),
+      status: "active" as const,
+    }));
+  }
+  throw new Error("Live positions fetch not yet implemented");
+}

@@ -1,47 +1,125 @@
 "use client";
 
-/**
- * useTransaction — manages the full lifecycle of a Soroban transaction:
- * build → sign → submit → confirm, with toast notifications.
- */
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { useUIStore } from "@/store";
 import { useWallet } from "./useWallet";
-import { submitAndConfirm } from "@/services/invoiceService";
+import { rpc, submitTransaction } from "@/lib/stellar/client";
+import * as StellarSdk from "@stellar/stellar-sdk";
+
+export type TxLifecycleStatus =
+  | "idle"
+  | "building"
+  | "simulating"
+  | "signing"
+  | "submitting"
+  | "polling"
+  | "confirmed"
+  | "failed";
+
+interface TxState {
+  status: TxLifecycleStatus;
+  txHash?: string;
+  error?: string;
+}
+
+const TOAST_ID = "kora-tx";
+const MAX_POLL_ATTEMPTS = 30;
+const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+const STAGE_MESSAGES: Record<TxLifecycleStatus, string> = {
+  idle: "",
+  building: "Building transaction…",
+  simulating: "Simulating transaction…",
+  signing: "Waiting for wallet signature…",
+  submitting: "Submitting to Stellar network…",
+  polling: "Waiting for confirmation…",
+  confirmed: "Transaction confirmed!",
+  failed: "Transaction failed",
+};
+
+async function pollWithBackoff(hash: string): Promise<string> {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+    if (Date.now() > deadline) throw new Error("Transaction timed out after 5 minutes");
+
+    const result = await rpc.getTransaction(hash);
+    if (result.status === "SUCCESS") return hash;
+    if (result.status === "FAILED") throw new Error("Transaction failed on-chain");
+
+    // Exponential backoff: 1s, 2s, 4s, 8s … capped at 16s
+    const delay = Math.min(1000 * 2 ** attempt, 16_000);
+    await new Promise((r) => setTimeout(r, delay));
+  }
+
+  throw new Error(`Transaction not confirmed after ${MAX_POLL_ATTEMPTS} attempts`);
+}
 
 export function useTransaction() {
-  const { setTxState, resetTxState } = useUIStore();
+  const [state, setState] = useState<TxState>({ status: "idle" });
   const { signTransaction } = useWallet();
+
+  const setStage = (status: TxLifecycleStatus, extra?: Partial<TxState>) => {
+    setState((s) => ({ ...s, status, ...extra }));
+    if (status !== "idle" && status !== "confirmed" && status !== "failed") {
+      toast.loading(STAGE_MESSAGES[status], { id: TOAST_ID });
+    }
+  };
 
   const execute = useCallback(
     async (
-      buildFn: () => Promise<string>, // returns unsigned XDR
-      options?: {
-        onSuccess?: (hash: string) => void;
-        successMessage?: string;
-      }
+      buildFn: () => Promise<string>,
+      options?: { onSuccess?: (hash: string) => void; successMessage?: string }
     ): Promise<string | null> => {
-      const toastId = toast.loading("Building transaction…");
-      setTxState({ status: "building" });
-
       try {
         // 1. Build
+        setStage("building");
         const unsignedXdr = await buildFn();
 
-        // 2. Sign
-        toast.loading("Waiting for wallet signature…", { id: toastId });
-        setTxState({ status: "signing" });
+        // 2. Simulate (skip for mock XDRs)
+        if (!unsignedXdr.startsWith("mock_")) {
+          setStage("simulating");
+          const tx = StellarSdk.TransactionBuilder.fromXDR(
+            unsignedXdr,
+            process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE || StellarSdk.Networks.TESTNET
+          );
+          const sim = await rpc.simulateTransaction(tx);
+          if (StellarSdk.rpc.Api.isSimulationError(sim)) {
+            throw new Error(`Simulation failed: ${sim.error}`);
+          }
+        }
+
+        // 3. Sign
+        setStage("signing");
         const signedXdr = await signTransaction(unsignedXdr);
 
-        // 3. Submit + confirm
-        toast.loading("Submitting to Stellar network…", { id: toastId });
-        setTxState({ status: "submitting" });
-        const hash = await submitAndConfirm(signedXdr);
+        // 4. Submit
+        setStage("submitting");
+        let hash: string;
 
-        setTxState({ status: "success", hash });
-        toast.success(options?.successMessage || "Transaction confirmed!", {
-          id: toastId,
+        if (signedXdr.startsWith("mock_")) {
+          await new Promise((r) => setTimeout(r, 800));
+          hash = Array.from({ length: 64 }, () =>
+            Math.floor(Math.random() * 16).toString(16)
+          ).join("");
+        } else {
+          const result = await submitTransaction(signedXdr);
+          if (result.status === "ERROR") throw new Error("Transaction submission failed");
+          hash = result.hash;
+        }
+
+        // 5. Poll
+        setStage("polling", { txHash: hash });
+        if (!signedXdr.startsWith("mock_")) {
+          await pollWithBackoff(hash);
+        } else {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+
+        // 6. Confirmed
+        setState({ status: "confirmed", txHash: hash });
+        toast.success(options?.successMessage ?? "Transaction confirmed!", {
+          id: TOAST_ID,
           description: `Hash: ${hash.slice(0, 16)}…`,
         });
 
@@ -49,16 +127,25 @@ export function useTransaction() {
         return hash;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Transaction failed";
-        setTxState({ status: "error", error: message });
-        toast.error("Transaction failed", { id: toastId, description: message });
+        setState({ status: "failed", error: message });
+        toast.error("Transaction failed", {
+          id: TOAST_ID,
+          description: message,
+          action: { label: "Retry", onClick: () => setState({ status: "idle" }) },
+        });
         return null;
-      } finally {
-        // Reset after 3s so UI can show success state briefly
-        setTimeout(resetTxState, 3000);
       }
     },
-    [signTransaction, setTxState, resetTxState]
+    [signTransaction]
   );
 
-  return { execute };
+  const reset = useCallback(() => setState({ status: "idle" }), []);
+
+  return {
+    execute,
+    reset,
+    status: state.status,
+    txHash: state.txHash,
+    error: state.error,
+  };
 }
