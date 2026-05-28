@@ -68,7 +68,8 @@ export function getFilteredInvoices(
     result = result.filter(
       (i) =>
         i.metadata.debtorName.toLowerCase().includes(q) ||
-        i.metadata.invoiceNumber.toLowerCase().includes(q)
+        i.metadata.invoiceNumber.toLowerCase().includes(q) ||
+        i.metadata.jurisdiction.toLowerCase().includes(q)
     );
   }
 
@@ -131,28 +132,47 @@ export function fromQueryParams(params: URLSearchParams): {
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
+const SEARCH_HISTORY_KEY = "kora-search-history";
+const MAX_HISTORY = 5;
+
+function loadSearchHistory(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveSearchHistory(history: string[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+}
+
 interface InvoiceStore {
   invoices: Invoice[];
   filters: FilterState;
   sort: SortState;
-  /** Convenience alias — same value as `sort.sortBy` combined with `sort.sortDir` (e.g. "apr_desc") */
   sortBy: string;
   searchQuery: string;
+  searchHistory: string[];
   selectedInvoice: Invoice | null;
   createDraft: InvoiceCreateDraft;
 
   // Actions
   setInvoices: (invoices: Invoice[]) => void;
   setFilters: (filters: Partial<FilterState>) => void;
-  /** Convenience alias — sets a single key on `filters` */
   updateSingleFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
   resetFilters: () => void;
   setSort: (sort: Partial<SortState>) => void;
-  /** Convenience alias — parses a combined "key_dir" string like "apr_desc" */
   setSortBy: (sortBy: string) => void;
   setSearchQuery: (q: string) => void;
+  clearSearchHistory: () => void;
   setSelectedInvoice: (invoice: Invoice | null) => void;
   updateInvoiceFunding: (id: string, newAmount: number) => void;
+  rollbackInvoiceFunding: (id: string) => void;
+  // internal backup map (not persisted)
+  _fundingBackup?: Record<string, any>;
   setCreateDraft: (draft: Partial<InvoiceCreateDraft>) => void;
   clearCreateDraft: () => void;
 
@@ -166,11 +186,9 @@ export const useInvoiceStore = create<InvoiceStore>()(
       invoices: [],
       filters: DEFAULT_FILTERS,
       sort: DEFAULT_SORT,
-      get sortBy() {
-        const { sort } = get();
-        return `${sort.sortBy}_${sort.sortDir}`;
-      },
+      sortBy: "apr_desc",
       searchQuery: "",
+      searchHistory: loadSearchHistory(),
       selectedInvoice: null,
       createDraft: { currency: "USDC" },
 
@@ -183,42 +201,80 @@ export const useInvoiceStore = create<InvoiceStore>()(
         set((s) => ({ filters: { ...s.filters, [key]: value } })),
 
       resetFilters: () =>
-        set({ filters: DEFAULT_FILTERS, searchQuery: "" }),
+        set({ filters: DEFAULT_FILTERS, searchQuery: "", sortBy: "apr_desc" }),
 
       setSort: (sort) =>
         set((s) => ({ sort: { ...s.sort, ...sort } })),
 
-      setSortBy: (sortBy) => {
-        const parts = sortBy.split("_");
-        const dir = parts[parts.length - 1] as "asc" | "desc";
-        const key = parts.slice(0, -1).join("_") as SortState["sortBy"];
-        const validDirs: Array<"asc" | "desc"> = ["asc", "desc"];
-        if (validDirs.includes(dir)) {
-          set((s) => ({ sort: { ...s.sort, sortBy: key, sortDir: dir } }));
-        }
-      },
+      setSortBy: (sortBy) => set({ sortBy }),
 
-      setSearchQuery: (searchQuery) => set({ searchQuery }),
+      setSearchQuery: (searchQuery) =>
+        set((s) => {
+          const trimmed = searchQuery.trim();
+          let history = s.searchHistory;
+          if (trimmed && !history.includes(trimmed)) {
+            history = [trimmed, ...history].slice(0, MAX_HISTORY);
+            saveSearchHistory(history);
+          }
+          return { searchQuery, searchHistory: history };
+        }),
+
+      clearSearchHistory: () => {
+        saveSearchHistory([]);
+        set({ searchHistory: [] });
+      },
 
       setSelectedInvoice: (selectedInvoice) => set({ selectedInvoice }),
 
       /** Optimistic update — instantly reflects new funding amount in UI */
       updateInvoiceFunding: (id, newAmount) =>
-        set((s) => ({
-          invoices: s.invoices.map((inv) => {
+        set((s) => {
+          const prev = s.invoices.find((i) => i.id === id);
+          const backup = prev ? { ...prev.funding, status: prev.status } : undefined;
+          const nextInvoices = s.invoices.map((inv) => {
             if (inv.id !== id) return inv;
             const totalRaised = Math.min(newAmount, inv.funding.targetAmount);
+            const isFull = totalRaised >= inv.funding.targetAmount;
             return {
               ...inv,
+              status: isFull ? "fully_funded" : inv.status,
               funding: {
                 ...inv.funding,
                 totalRaised,
                 fundingProgress: totalRaised / inv.funding.targetAmount,
                 remainingCapacity: inv.funding.targetAmount - totalRaised,
+                investorCount: inv.funding.investorCount + 1,
               },
             };
-          }),
-        })),
+          });
+          return {
+            invoices: nextInvoices,
+            _fundingBackup: backup ? { ...(s._fundingBackup || {}), [id]: backup } : s._fundingBackup,
+          } as any;
+        }),
+
+      rollbackInvoiceFunding: (id) =>
+        set((s) => {
+          const backup = s._fundingBackup?.[id];
+          if (!backup) return {} as any;
+          const invoices = s.invoices.map((inv) => {
+            if (inv.id !== id) return inv;
+            return {
+              ...inv,
+              status: backup.status ?? inv.status,
+              funding: {
+                ...inv.funding,
+                totalRaised: backup.totalRaised ?? inv.funding.totalRaised,
+                fundingProgress: backup.fundingProgress ?? inv.funding.fundingProgress,
+                remainingCapacity: backup.remainingCapacity ?? inv.funding.remainingCapacity,
+                investorCount: backup.investorCount ?? inv.funding.investorCount,
+              },
+            } as Invoice;
+          });
+          const nextBackup = { ...(s._fundingBackup || {}) };
+          delete nextBackup[id];
+          return { invoices, _fundingBackup: nextBackup } as any;
+        }),
 
       setCreateDraft: (draft) =>
         set((s) => ({ createDraft: { ...s.createDraft, ...draft } })),

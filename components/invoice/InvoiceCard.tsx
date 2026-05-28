@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Calendar, Users, TrendingUp, MapPin, ArrowRight } from "lucide-react";
-import { RiskBadge, Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Calendar, Users, TrendingUp, MapPin } from "lucide-react";
+import { RiskBadge } from "@/components/ui/badge";
+import { InvoiceFundingProgress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
@@ -129,17 +129,12 @@ export function InvoiceCard({ invoice, index = 0 }: InvoiceCardProps) {
             </p>
           </div>
 
-          {/* Progress */}
-          <div className="mt-4 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">
-                {formatCurrency(funding.totalRaised, metadata.currency, true)} raised
-              </span>
-              <span className="font-medium text-foreground">
-                {Math.round(funding.fundingProgress * 100)}%
-              </span>
-            </div>
-            <Progress value={funding.fundingProgress * 100} />
+          <div className="mt-4">
+            <InvoiceFundingProgress
+              funded={funding.totalRaised}
+              target={funding.targetAmount}
+              currency={metadata.currency}
+            />
           </div>
 
           {/* Metrics */}

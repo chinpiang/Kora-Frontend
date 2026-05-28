@@ -12,10 +12,7 @@ import {
   ChevronDown,
   RotateCcw,
   FileQuestion,
-  TrendingUp,
-  Calendar,
-  Users,
-  MapPin,
+  Clock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +21,8 @@ import { Pagination } from "@/components/ui/pagination";
 import { InvoiceCard, InvoiceCardSkeleton } from "@/components/invoice/InvoiceCard";
 import { useInvoices } from "@/hooks/useInvoices";
 import { useInvoiceStore, DEFAULT_FILTERS } from "@/store";
+import { Container } from "@/components/layout/Container";
+import { useBreakpoint } from "@/components/layout/useBreakpoint";
 import { cn } from "@/lib/utils";
 
 // ─── Filter Options ──────────────────────────────────────────────────────────
@@ -394,17 +393,32 @@ function MarketplaceContent() {
     filters,
     sortBy,
     searchQuery,
+    searchHistory,
     setFilters,
     updateSingleFilter,
     resetFilters,
     setSortBy,
     setSearchQuery,
+    clearSearchHistory,
   } = useInvoiceStore();
 
   const { data, isLoading } = useInvoices();
   const [showFilters, setShowFilters] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isUrlHydrated, setIsUrlHydrated] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Close history dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowHistory(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   // Pagination State
   const [page, setPage] = useState(1);
@@ -611,7 +625,7 @@ function MarketplaceContent() {
   }
 
   return (
-    <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <Container className="relative py-10 lg:px-8">
       {/* Background radial gradient mesh */}
       <div className="absolute inset-0 bg-mesh pointer-events-none z-0" />
 
@@ -632,14 +646,52 @@ function MarketplaceContent() {
 
         {/* Search + Sort + Toggle Bar */}
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex-1">
-            <Input
-              placeholder="Search by debtor, invoice number, or category…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              leftIcon={<Search className="h-4 w-4 text-zinc-500" />}
-              className="bg-zinc-950/40 border-zinc-800/80 focus:border-primary/50"
-            />
+          <div className="flex-1" ref={searchRef}>
+            <div className="relative">
+              <Input
+                placeholder="Search by debtor, invoice number, or jurisdiction…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setShowHistory(true)}
+                leftIcon={<Search className="h-4 w-4 text-zinc-500" />}
+                className="bg-zinc-950/40 border-zinc-800/80 focus:border-primary/50"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(""); setShowHistory(false); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              {showHistory && searchHistory.length > 0 && !searchQuery && (
+                <div className="absolute top-full left-0 z-50 mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Recent</span>
+                    <button
+                      type="button"
+                      onClick={clearSearchHistory}
+                      className="text-[10px] text-zinc-500 hover:text-zinc-300"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {searchHistory.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => { setSearchQuery(h); setShowHistory(false); }}
+                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+                    >
+                      <Clock className="h-3.5 w-3.5 text-zinc-500" />
+                      {h}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex gap-2.5 shrink-0">
             {/* Filter Toggle for Mobile / Drawer triggers */}
@@ -743,12 +795,12 @@ function MarketplaceContent() {
 
       {/* C. Slide-out Filter Drawer (Mobile screens) */}
       {isMobileDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end lg:hidden">
+        <div className="fixed inset-0 z-50 flex items-end justify-center lg:hidden">
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity"
+            className="absolute inset-0 bg-black/70 backdrop-blur-xs"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
-          <div className="relative z-50 flex h-full w-full max-w-xs flex-col bg-zinc-950 p-6 border-l border-zinc-905 shadow-2xl transition-transform duration-300">
+          <div className="relative z-50 w-full max-w-3xl rounded-t-[32px] border border-zinc-900 bg-zinc-950 p-6 shadow-2xl shadow-black/40 max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between border-b border-zinc-900 pb-4 mb-6">
               <h2 className="text-md font-bold text-zinc-150 flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4 text-primary" />
@@ -761,13 +813,15 @@ function MarketplaceContent() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-6 pr-1">
-              {renderFiltersList()}
+            <div className="flex h-[calc(90vh-5rem)] flex-col overflow-hidden">
+              <div className="overflow-y-auto pr-1 space-y-6">
+                {renderFiltersList()}
+              </div>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </Container>
   );
 }
 
