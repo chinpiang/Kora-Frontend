@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Invoice } from "@/types";
 import {
   Search,
   SlidersHorizontal,
@@ -19,7 +20,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { InvoiceCard } from "@/components/invoice/InvoiceCard";
+import { Pagination } from "@/components/ui/pagination";
+import { InvoiceCard, InvoiceCardSkeleton } from "@/components/invoice/InvoiceCard";
 import { useInvoices } from "@/hooks/useInvoices";
 import { useInvoiceStore, DEFAULT_FILTERS } from "@/store";
 import { cn } from "@/lib/utils";
@@ -357,62 +359,6 @@ function Switch({
   );
 }
 
-// 5. High-fidelity InvoiceCard Skeleton Component
-function InvoiceCardSkeleton() {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-4 animate-pulse">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 space-y-2">
-          <div className="h-4 bg-zinc-850 rounded w-3/4" />
-          <div className="h-3 bg-zinc-850 rounded w-1/2" />
-        </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <div className="h-5 bg-zinc-850 rounded w-12" />
-          <div className="h-5 bg-zinc-850 rounded w-16" />
-        </div>
-      </div>
-
-      {/* Amount & Financing */}
-      <div className="space-y-2 mt-4">
-        <div className="h-8 bg-zinc-850 rounded w-1/2" />
-        <div className="h-3 bg-zinc-850 rounded w-1/3" />
-      </div>
-
-      {/* Progress */}
-      <div className="space-y-2 mt-4">
-        <div className="flex items-center justify-between">
-          <div className="h-3 bg-zinc-850 rounded w-1/4" />
-          <div className="h-3 bg-zinc-850 rounded w-10" />
-        </div>
-        <div className="h-2 bg-zinc-850 rounded w-full animate-pulse" />
-      </div>
-
-      {/* Metrics */}
-      <div className="grid grid-cols-3 gap-3 border-t border-zinc-850 pt-4 mt-4">
-        <div className="space-y-1.5">
-          <div className="h-3 bg-zinc-850 rounded w-10" />
-          <div className="h-4 bg-zinc-850 rounded w-16" />
-        </div>
-        <div className="space-y-1.5">
-          <div className="h-3 bg-zinc-850 rounded w-10" />
-          <div className="h-4 bg-zinc-850 rounded w-12" />
-        </div>
-        <div className="space-y-1.5">
-          <div className="h-3 bg-zinc-850 rounded w-10" />
-          <div className="h-4 bg-zinc-850 rounded w-8" />
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="flex items-center justify-between border-t border-zinc-850 pt-4 mt-4">
-        <div className="h-3 bg-zinc-850 rounded w-2/5" />
-        <div className="h-3 bg-zinc-850 rounded w-12" />
-      </div>
-    </div>
-  );
-}
-
 // 6. Premium Styled Empty State
 function EmptyState({ onClear }: { onClear: () => void }) {
   return (
@@ -460,6 +406,10 @@ function MarketplaceContent() {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isUrlHydrated, setIsUrlHydrated] = useState(false);
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   // 1. URL to Zustand Sync Loop (On Mount / Initial Hydration)
   /* Hydrates the client-side Zustand store with initial filters parsed from the URL search queries */
   useEffect(() => {
@@ -475,6 +425,12 @@ function MarketplaceContent() {
     const activeOnly = searchParams.get("activeOnly") === "true";
     const sortByParam = searchParams.get("sortBy") || "apr_desc";
     const qParam = searchParams.get("q") || "";
+
+    const urlPage = Number(searchParams.get("page") || 1);
+    const urlPageSize = Number(searchParams.get("pageSize") || 10);
+
+    setPage(urlPage);
+    setPageSize(urlPageSize);
 
     setFilters({
       categories,
@@ -507,6 +463,10 @@ function MarketplaceContent() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedFilters, debouncedSearchQuery, sortBy]);
+
   // 3. Zustand to URL Sync Loop (On Change)
   /* Serializes active filters and pushes the resulting query string to the browser address bar */
   useEffect(() => {
@@ -537,12 +497,18 @@ function MarketplaceContent() {
     if (sortBy && sortBy !== "apr_desc") {
       params.set("sortBy", sortBy);
     }
+    if (page > 1) {
+      params.set("page", String(page));
+    }
+    if (pageSize !== 10) {
+      params.set("pageSize", String(pageSize));
+    }
 
     const queryString = params.toString();
     const targetUrl = queryString ? `/marketplace?${queryString}` : "/marketplace";
 
     router.replace(targetUrl, { scroll: false });
-  }, [debouncedFilters, debouncedSearchQuery, sortBy, isUrlHydrated, router]);
+  }, [debouncedFilters, debouncedSearchQuery, sortBy, isUrlHydrated, router, page, pageSize]);
 
   const invoices = data?.data ?? [];
 
@@ -555,6 +521,12 @@ function MarketplaceContent() {
           inv.metadata.category.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
       )
     : invoices;
+
+  // Slice the filtered list for display
+  const paginatedInvoices = useMemo<Invoice[]>(() => {
+    const startIndex = (page - 1) * pageSize;
+    return filteredInvoices.slice(startIndex, startIndex + pageSize);
+  }, [filteredInvoices, page, pageSize]);
 
   // Active filters count for clearing badge
   const activeFiltersCount =
@@ -739,7 +711,7 @@ function MarketplaceContent() {
           </div>
 
           {/* B. Grid listing and states */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 space-y-6">
             {isLoading ? (
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {[...Array(8)].map((_, i) => (
@@ -749,11 +721,21 @@ function MarketplaceContent() {
             ) : filteredInvoices.length === 0 ? (
               <EmptyState onClear={resetFilters} />
             ) : (
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredInvoices.map((invoice, i) => (
-                  <InvoiceCard key={invoice.id} invoice={invoice} index={i} />
-                ))}
-              </div>
+              <>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {paginatedInvoices.map((invoice: Invoice, i: number) => (
+                    <InvoiceCard key={invoice.id} invoice={invoice} index={i} />
+                  ))}
+                </div>
+                <Pagination
+                  totalItems={filteredInvoices.length}
+                  pageSize={pageSize}
+                  currentPage={page}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                  syncToUrl={false}
+                />
+              </>
             )}
           </div>
         </div>

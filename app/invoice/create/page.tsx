@@ -16,8 +16,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Input, Textarea, NumberInput, DatePicker, FileInput, Select } from "@/components/ui";
 import { GlassCard } from "@/components/ui/card";
 import { useWallet } from "@/hooks/useWallet";
 import { useTransaction } from "@/hooks/useTransaction";
@@ -388,21 +387,31 @@ export default function CreateInvoicePage() {
                   {...register("debtorAddress")}
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input
+                  <NumberInput
                     label="Invoice Amount (USDC)"
-                    type="number"
                     placeholder="50000"
                     hint="Minimum 100 USDC"
                     error={errors.amount?.message}
+                    success={!!watch("amount") && !errors.amount}
                     {...register("amount")}
                   />
-                  <Input
+                  <DatePicker
                     label="Due Date"
-                    type="date"
                     error={errors.dueDate?.message}
+                    success={!!watch("dueDate") && !errors.dueDate}
+                    min={TODAY}
                     {...register("dueDate")}
                   />
                 </div>
+                <Textarea
+                  label="Description / Memo"
+                  placeholder="Optional details or terms of the invoice..."
+                  maxLength={200}
+                  showCharacterCount={true}
+                  error={errors.description?.message}
+                  success={!!watch("description") && !errors.description}
+                  {...register("description")}
+                />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Select
                     label="Jurisdiction"
@@ -481,22 +490,23 @@ export default function CreateInvoicePage() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input
+                  <NumberInput
                     label="Minimum Investment (USDC)"
-                    type="number"
                     placeholder="1000"
                     hint="Smallest amount a single investor can contribute"
                     error={errors.minInvestment?.message}
+                    success={!!watch("minInvestment") && !errors.minInvestment}
                     {...register("minInvestment")}
                   />
 
-                  <Input
+                  <DatePicker
                     label="Listing Expiry Date"
-                    type="date"
                     min={TODAY}
                     max={maxExpiryDate}
+                    placeholder="Select expiry date..."
                     hint="When the listing period closes"
                     error={errors.listingExpiryDate?.message}
+                    success={!!watch("listingExpiryDate") && !errors.listingExpiryDate}
                     {...register("listingExpiryDate")}
                   />
                 </div>
@@ -642,67 +652,15 @@ export default function CreateInvoicePage() {
                       </p>
                     </div>
                   ) : (
-                    <div
-                      {...getRootProps()}
-                      className={cn(
-                        "cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-all duration-300",
-                        isDragActive && isDragAccept && "border-emerald-500 bg-emerald-500/5 shadow-inner",
-                        isDragActive && isDragReject && "border-red-500 bg-red-500/5 shadow-inner",
-                        !isDragActive && "border-zinc-700 hover:border-zinc-500 hover:bg-zinc-900/20"
-                      )}
-                    >
-                      <input {...getInputProps()} />
-                      {file ? (
-                        <div className="flex items-center justify-center gap-3">
-                          <FileText className="text-kora-400 h-8 w-8 animate-pulse" />
-                          <div className="text-left">
-                            <p className="text-sm font-medium text-zinc-200 truncate max-w-[200px] sm:max-w-[300px]">
-                              {file.name}
-                            </p>
-                            <p className="text-xs text-zinc-500">
-                              {(file.size / (1024 * 1024)).toFixed(2)} MB
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setFile(null);
-                              setFileError(null);
-                            }}
-                            className="ml-2 text-zinc-500 hover:text-zinc-300 p-1.5 hover:bg-zinc-800 rounded-full transition-colors"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <Upload className={cn(
-                            "mx-auto h-8 w-8 transition-transform duration-300",
-                            isDragActive ? "scale-110 text-kora-400" : "text-zinc-500"
-                          )} />
-                          <p className="text-sm text-zinc-300">
-                            {isDragActive
-                              ? "Drop it here to upload!"
-                              : "Drop your invoice PDF here, or click to browse"}
-                          </p>
-                          <p className="text-xs text-zinc-500">PDF up to 10MB</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {fileError && (
-                    <p className="mt-2 flex items-center gap-1.5 text-xs text-red-400 bg-red-500/5 border border-red-500/10 px-3 py-2 rounded-lg">
-                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                      <span>{fileError}</span>
-                    </p>
-                  )}
-
-                  {!file && !fileError && (
-                    <p className="mt-2 flex items-center gap-1 text-xs text-amber-400/90">
-                      <AlertCircle className="h-3.5 w-3.5" /> Document required to mint
-                    </p>
+                    <FileInput
+                      value={file}
+                      onChange={(e: any) => {
+                        setFile(e.target.value);
+                        setFileError(null);
+                      }}
+                      error={fileError || undefined}
+                      disabled={isUploading}
+                    />
                   )}
                 </div>
 

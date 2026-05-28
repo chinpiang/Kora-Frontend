@@ -28,4 +28,5 @@ export interface DataTableProps<T extends { id: string }> {
   emptyState?: DataTableEmptyState;
   getRowId?: (row: T) => string;
   className?: string;
+  syncToUrl?: boolean;
 }

@@ -238,3 +238,33 @@ export async function fetchInvestorPositions(investorAddress: string): Promise<i
   }
   throw new Error("Live positions fetch not yet implemented");
 }
+
+/**
+ * Repay a fully-funded invoice — returns unsigned XDR for wallet signing.
+ */
+export async function prepareRepayInvoice(
+  tokenId: string,
+  ownerAddress: string
+): Promise<string> {
+  if (USE_MOCK) {
+    return `mock_unsigned_xdr_repay_invoice_${tokenId}_${ownerAddress}`;
+  }
+  return (invoiceContract as any).repayInvoice({ tokenId: BigInt(tokenId) }, ownerAddress);
+}
+
+/**
+ * Claim yield from a repaid position — returns unsigned XDR for wallet signing.
+ */
+export async function prepareClaimPosition(
+  positionId: string,
+  investorAddress: string
+): Promise<string> {
+  if (USE_MOCK) {
+    return `mock_unsigned_xdr_claim_position_${positionId}_${investorAddress}`;
+  }
+  return (marketplaceContract as any).claimPosition(
+    { positionId: BigInt(positionId) },
+    investorAddress
+  );
+}
+

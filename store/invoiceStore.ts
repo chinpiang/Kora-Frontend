@@ -135,6 +135,8 @@ interface InvoiceStore {
   invoices: Invoice[];
   filters: FilterState;
   sort: SortState;
+  /** Convenience alias — same value as `sort.sortBy` combined with `sort.sortDir` (e.g. "apr_desc") */
+  sortBy: string;
   searchQuery: string;
   selectedInvoice: Invoice | null;
   createDraft: InvoiceCreateDraft;
@@ -142,8 +144,12 @@ interface InvoiceStore {
   // Actions
   setInvoices: (invoices: Invoice[]) => void;
   setFilters: (filters: Partial<FilterState>) => void;
+  /** Convenience alias — sets a single key on `filters` */
+  updateSingleFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
   resetFilters: () => void;
   setSort: (sort: Partial<SortState>) => void;
+  /** Convenience alias — parses a combined "key_dir" string like "apr_desc" */
+  setSortBy: (sortBy: string) => void;
   setSearchQuery: (q: string) => void;
   setSelectedInvoice: (invoice: Invoice | null) => void;
   updateInvoiceFunding: (id: string, newAmount: number) => void;
@@ -160,6 +166,10 @@ export const useInvoiceStore = create<InvoiceStore>()(
       invoices: [],
       filters: DEFAULT_FILTERS,
       sort: DEFAULT_SORT,
+      get sortBy() {
+        const { sort } = get();
+        return `${sort.sortBy}_${sort.sortDir}`;
+      },
       searchQuery: "",
       selectedInvoice: null,
       createDraft: { currency: "USDC" },
@@ -169,11 +179,24 @@ export const useInvoiceStore = create<InvoiceStore>()(
       setFilters: (filters) =>
         set((s) => ({ filters: { ...s.filters, ...filters } })),
 
+      updateSingleFilter: (key, value) =>
+        set((s) => ({ filters: { ...s.filters, [key]: value } })),
+
       resetFilters: () =>
         set({ filters: DEFAULT_FILTERS, searchQuery: "" }),
 
       setSort: (sort) =>
         set((s) => ({ sort: { ...s.sort, ...sort } })),
+
+      setSortBy: (sortBy) => {
+        const parts = sortBy.split("_");
+        const dir = parts[parts.length - 1] as "asc" | "desc";
+        const key = parts.slice(0, -1).join("_") as SortState["sortBy"];
+        const validDirs: Array<"asc" | "desc"> = ["asc", "desc"];
+        if (validDirs.includes(dir)) {
+          set((s) => ({ sort: { ...s.sort, sortBy: key, sortDir: dir } }));
+        }
+      },
 
       setSearchQuery: (searchQuery) => set({ searchQuery }),
 

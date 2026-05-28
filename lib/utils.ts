@@ -110,3 +110,31 @@ export async function withRetry<T>(
   }
   throw lastError;
 }
+
+/**
+ * Convert an array of objects to a CSV file and trigger a browser download.
+ * @param rows   Array of plain objects (all rows must share the same keys)
+ * @param filename  Desired filename including `.csv` extension
+ */
+export function exportCsv(rows: Record<string, unknown>[], filename = "export.csv"): void {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const escape = (v: unknown) => {
+    const str = String(v ?? "");
+    return str.includes(",") || str.includes('"') || str.includes("\n")
+      ? `"${str.replace(/"/g, '""')}"`
+      : str;
+  };
+  const csv = [
+    headers.map(escape).join(","),
+    ...rows.map((row) => headers.map((h) => escape(row[h])).join(",")),
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
