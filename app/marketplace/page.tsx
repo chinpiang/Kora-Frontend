@@ -402,7 +402,7 @@ function MarketplaceContent() {
     clearSearchHistory,
   } = useInvoiceStore();
 
-  const { data, isLoading } = useInvoices();
+  const { data, isLoading, dataUpdatedAt } = useInvoices();
   const [showFilters, setShowFilters] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isUrlHydrated, setIsUrlHydrated] = useState(false);
@@ -776,7 +776,7 @@ function MarketplaceContent() {
               <>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {paginatedInvoices.map((invoice: Invoice, i: number) => (
-                    <InvoiceCard key={invoice.id} invoice={invoice} index={i} />
+                    <InvoiceCard key={invoice.id} invoice={invoice} index={i} updatedAt={dataUpdatedAt} />
                   ))}
                 </div>
                 <Pagination

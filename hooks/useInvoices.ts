@@ -41,10 +41,17 @@ export function useInvoices(page = 1) {
       ),
     staleTime: STALE_30S,
     gcTime: GC_5MIN,
+    refetchInterval: () =>
+      typeof document !== "undefined" && document.visibilityState === "hidden"
+        ? false
+        : 15_000,
+    refetchIntervalInBackground: false,
   });
 }
 
 // ─── Detail ───────────────────────────────────────────────────────────────────
+
+const ACTIVE_STATUSES = new Set(["listed", "partially_funded"]);
 
 export function useInvoice(id: string) {
   return useQuery({
@@ -53,6 +60,14 @@ export function useInvoice(id: string) {
     enabled: !!id,
     staleTime: STALE_30S,
     gcTime: GC_5MIN,
+    refetchInterval: (query) => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+      const status = query.state.data?.status;
+      if (!status || !ACTIVE_STATUSES.has(status)) return false;
+      if ((query.state.data?.funding.fundingProgress ?? 0) >= 1) return false;
+      return ACTIVE_STATUSES.has(status) ? 15_000 : 60_000;
+    },
+    refetchIntervalInBackground: false,
   });
 }
 
