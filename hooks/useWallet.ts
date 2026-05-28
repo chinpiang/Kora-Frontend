@@ -10,6 +10,7 @@ import {
   LobstrModule,
   AlbedoModule,
 } from "@creit.tech/stellar-wallets-kit";
+import * as StellarSdk from "@stellar/stellar-sdk";
 import { useWalletStore } from "@/store";
 import { getAccountBalances } from "@/lib/stellar/client";
 import type { WalletProvider } from "@/types";
@@ -38,8 +39,21 @@ function getKit(): StellarWalletsKit {
 }
 
 export function useWallet() {
-  const { address, publicKey, isConnected, provider, balance, connect, disconnect, setBalance } =
-    useWalletStore();
+  const {
+    address,
+    publicKey,
+    isConnected,
+    provider,
+    balance,
+    isVerified,
+    verifiedAt,
+    connect,
+    disconnect,
+    setBalance,
+    setVerified,
+    clearVerification,
+    isVerificationExpired,
+  } = useWalletStore();
 
   const connectWallet = useCallback(
     async (walletId: string = FREIGHTER_ID) => {
@@ -103,15 +117,93 @@ export function useWallet() {
     }
   }, [address, setBalance]);
 
+  const requestChallenge = useCallback(async (): Promise<string> => {
+    try {
+      const res = await fetch("/api/auth/challenge", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to request challenge");
+      const data = await res.json();
+      return data.challenge;
+    } catch (error) {
+      console.error("Error requesting challenge:", error);
+      throw error;
+    }
+  }, []);
+
+  const verifyOwnership = useCallback(async (): Promise<boolean> => {
+    if (!isConnected || !address || !publicKey) {
+      throw new Error("Wallet not connected");
+    }
+
+    try {
+      // Request a challenge from the server
+      const challenge = await requestChallenge();
+
+      // Sign the challenge with the wallet
+      const walletKit = getKit();
+      const { result: signature } = await walletKit.signMessage({
+        message: challenge,
+        publicKey: publicKey,
+      });
+
+      // Send signature to server for verification
+      const verifyRes = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challenge,
+          signature,
+          publicKey,
+        }),
+      });
+
+      if (!verifyRes.ok) throw new Error("Verification request failed");
+      const verifyData = await verifyRes.json();
+
+      if (verifyData.verified) {
+        setVerified(true, verifyData.expiresAt);
+        return true;
+      } else {
+        clearVerification();
+        console.error("Verification failed:", verifyData.message);
+        return false;
+      }
+    } catch (error) {
+      console.error("Error during verification:", error);
+      clearVerification();
+      throw error;
+    }
+  }, [isConnected, address, publicKey, requestChallenge, setVerified, clearVerification]);
+
+  const checkVerification = useCallback((): boolean => {
+    if (!isConnected) return false;
+    if (isVerificationExpired()) {
+      clearVerification();
+      return false;
+    }
+    return isVerified;
+  }, [isConnected, isVerified, isVerificationExpired, clearVerification]);
+
+  const requireVerification = useCallback(async (): Promise<void> => {
+    if (!checkVerification()) {
+      throw new Error("VERIFICATION_REQUIRED");
+    }
+  }, [checkVerification]);
+
   return {
     address,
     publicKey,
     isConnected,
     provider,
     balance,
+    isVerified: checkVerification(),
+    verifiedAt,
     connectWallet,
     disconnectWallet,
     signTransaction,
     refreshBalance,
+    requestChallenge,
+    verifyOwnership,
+    checkVerification,
+    requireVerification,
   };
 }

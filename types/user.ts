@@ -17,6 +17,8 @@ export interface WalletState {
   provider: WalletProvider | null;
   network: "testnet" | "mainnet" | "futurenet";
   balance: WalletBalance | null;
+  isVerified: boolean;
+  verifiedAt: number | null;
 }
 
 export interface WalletBalance {
