@@ -14,12 +14,16 @@ const DataTable = dynamic(() => import("@/components/ui/data-table").then((m) =>
 });
 import { useWallet } from "@/hooks/useWallet";
 import { useUIStore } from "@/store";
+import { usePositions } from "@/hooks/usePositions";
+import { useTransaction } from "@/hooks/useTransaction";
+import { prepareClaimPosition } from "@/services/invoiceService";
 import { MOCK_INVOICES } from "@/services/mockData";
 import { RiskBadge } from "@/components/ui/badge";
 import {
   formatCurrency,
   formatDate,
   formatApr,
+  RISK_TIER_COLORS,
   cn,
 } from "@/lib/utils";
 import type { ColumnDef } from "@/types/table";
@@ -29,6 +33,7 @@ interface InvestorPosition {
   invoice: (typeof MOCK_INVOICES)[number];
   investedAmount: number;
   expectedReturn: number;
+  status: "active" | "repaid";
 }
 
 // Keep a small mock fallback but prefer hook data
@@ -37,6 +42,7 @@ const POSITIONS: InvestorPosition[] = MOCK_INVOICES.slice(0, 4).map((inv, i) => 
   invoice: inv,
   investedAmount: [15000, 50000, 5000, 100000][i],
   expectedReturn: [15000, 50000, 5000, 100000][i] * (1 + inv.terms.discountRate),
+  status: inv.status === "repaid" ? "repaid" : "active",
 }));
 
 const POSITION_COLUMNS: ColumnDef<InvestorPosition>[] = [
@@ -163,7 +169,7 @@ export default function InvestorDashboardPage() {
   const { isConnected } = useWallet();
   const { setWalletModalOpen } = useUIStore();
   const { address } = useWallet();
-  const positionsQuery = usePositions(address, { refetchInterval: 30_000 });
+  const positionsQuery = usePositions(address ?? undefined, { refetchInterval: 30_000 });
   const { execute } = useTransaction();
 
   if (!isConnected) {
@@ -268,7 +274,16 @@ export default function InvestorDashboardPage() {
     },
   ];
 
-  const positionsData = positionsQuery.data || POSITIONS;
+  const rawPositions = positionsQuery.data;
+  const positionsData: InvestorPosition[] = rawPositions
+    ? rawPositions.map((p) => ({
+        id: p.invoiceId,
+        invoice: p.invoice,
+        investedAmount: p.investedAmount,
+        expectedReturn: p.expectedReturn,
+        status: p.status as "active" | "repaid",
+      }))
+    : POSITIONS;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">

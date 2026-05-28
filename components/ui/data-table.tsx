@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBreakpoint } from "@/components/layout/useBreakpoint";
 import type { ColumnDef, DataTableProps, TableSortDirection } from "@/types/table";
+import { Pagination } from "./pagination";
 
 function getSortValue<T>(row: T, column: ColumnDef<T>): string | number {
   if (column.accessor) {
@@ -40,6 +41,7 @@ export function DataTable<T extends { id: string }>({
   emptyState,
   getRowId = (row) => row.id,
   className,
+  syncToUrl = false,
 }: DataTableProps<T>) {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<TableSortDirection>(null);
@@ -372,54 +374,18 @@ export function DataTable<T extends { id: string }>({
       </div>
 
       {!isLoading && data.length > 0 && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-muted-foreground">
-            Showing {currentPage * pageSize + 1}–
-            {Math.min((currentPage + 1) * pageSize, sortedData.length)} of {sortedData.length}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              Rows
-              <select
-                className="h-8 rounded-md border border-input bg-card px-2 text-foreground"
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(0);
-                }}
-              >
-                {pageSizeOptions.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={currentPage === 0}
-              aria-label="Previous page"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Page {currentPage + 1} of {totalPages}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={currentPage >= totalPages - 1}
-              aria-label="Next page"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          totalItems={sortedData.length}
+          pageSize={pageSize}
+          currentPage={page + 1}
+          onPageChange={(p) => setPage(p - 1)}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(0);
+          }}
+          pageSizeOptions={pageSizeOptions}
+          syncToUrl={syncToUrl}
+        />
       )}
     </div>
   );

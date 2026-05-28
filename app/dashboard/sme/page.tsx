@@ -13,7 +13,7 @@ const DataTable = dynamic(() => import("@/components/ui/data-table").then((m) =>
   loading: () => <div className="h-48 rounded bg-zinc-900/40" />,
 });
 import { useWallet } from "@/hooks/useWallet";
-import { useInvoices } from "@/hooks/useInvoices";
+import { useSMEInvoices } from "@/hooks/useInvoices";
 import { useTransaction } from "@/hooks/useTransaction";
 import { prepareRepayInvoice } from "@/services/invoiceService";
 import { useUIStore } from "@/store";
@@ -32,7 +32,7 @@ import type { ColumnDef } from "@/types/table";
 export default function SMEDashboardPage() {
   const { isConnected, address } = useWallet();
   const { setWalletModalOpen } = useUIStore();
-  const invoicesQuery = useInvoices({ refetchInterval: 30_000 });
+  const invoicesQuery = useSMEInvoices(address ?? undefined);
   const { execute } = useTransaction();
 
   if (!isConnected) {
@@ -47,8 +47,8 @@ export default function SMEDashboardPage() {
       </div>
     );
   }
-  const myInvoices: Invoice[] = (invoicesQuery.data?.data || MOCK_INVOICES).filter(
-    (i) => i.ownerAddress === address
+  const myInvoices: Invoice[] = (invoicesQuery.data || MOCK_INVOICES).filter(
+    (inv: Invoice) => inv.ownerAddress === address
   );
 
   const STATS = [
