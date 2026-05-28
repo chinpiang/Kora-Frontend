@@ -27,6 +27,7 @@ import {
   cn,
 } from "@/lib/utils";
 import type { ColumnDef } from "@/types/table";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 interface InvestorPosition {
   id: string;
@@ -286,7 +287,8 @@ export default function InvestorDashboardPage() {
     : POSITIONS;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+    <ErrorBoundary>
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Investor Dashboard</h1>
@@ -385,5 +387,6 @@ export default function InvestorDashboardPage() {
         </Card>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

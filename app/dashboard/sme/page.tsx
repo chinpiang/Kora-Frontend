@@ -31,6 +31,7 @@ import {
 } from "@/lib/utils";
 import type { Invoice } from "@/types";
 import type { ColumnDef } from "@/types/table";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 
 export default function SMEDashboardPage() {
@@ -105,6 +106,7 @@ export default function SMEDashboardPage() {
   };
 
   return (
+    <ErrorBoundary>
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
       <div className="mb-8 flex items-center justify-between">
         <div>
@@ -280,5 +282,6 @@ export default function SMEDashboardPage() {
         }
       />
     </div>
+    </ErrorBoundary>
   );
 }

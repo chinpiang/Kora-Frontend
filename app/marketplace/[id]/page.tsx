@@ -40,6 +40,8 @@ import {
   cn,
 } from "@/lib/utils";
 import { validateRouteId, safeIpfsUrl, safeExternalUrl, safeStellarTxUrl } from "@/lib/security";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 export default function InvoiceDetailPage() {
   const params = useParams<{ id: string }>();
@@ -163,6 +165,7 @@ Stellar Testnet Transaction Hash: ${txHash}`);
   };
 
   return (
+    <ErrorBoundary>
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
       {/* Back */}
       <Link
@@ -553,6 +556,7 @@ Stellar Testnet Transaction Hash: ${txHash}`);
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }
 

@@ -31,6 +31,7 @@ import {
 } from "@/lib/validations/invoice";
 import { cn } from "@/lib/utils";
 import { safeStellarTxUrl } from "@/lib/security";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 const TODAY = new Date().toISOString().split("T")[0];
 
@@ -318,6 +319,7 @@ export default function CreateInvoicePage() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-zinc-100">Create Invoice</h1>
@@ -790,5 +792,6 @@ export default function CreateInvoicePage() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }

@@ -25,6 +25,7 @@ import { Container } from "@/components/layout/Container";
 import { useBreakpoint } from "@/components/layout/useBreakpoint";
 import { cn } from "@/lib/utils";
 import { sanitizeQueryParam } from "@/lib/security";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 // ─── Filter Options ──────────────────────────────────────────────────────────
 
@@ -829,22 +830,24 @@ function MarketplaceContent() {
 // default export utilizing Suspense boundary for useSearchParams compliance
 export default function MarketplacePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-          <div className="mb-8 space-y-2">
-            <div className="h-8 bg-zinc-900 rounded w-1/4 animate-pulse" />
-            <div className="h-4 bg-zinc-900 rounded w-1/6 animate-pulse" />
+    <ErrorBoundary>
+      <Suspense
+        fallback={
+          <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+            <div className="mb-8 space-y-2">
+              <div className="h-8 bg-zinc-900 rounded w-1/4 animate-pulse" />
+              <div className="h-4 bg-zinc-900 rounded w-1/6 animate-pulse" />
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(8)].map((_, i) => (
+                <InvoiceCardSkeleton key={i} />
+              ))}
+            </div>
           </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {[...Array(8)].map((_, i) => (
-              <InvoiceCardSkeleton key={i} />
-            ))}
-          </div>
-        </div>
-      }
-    >
-      <MarketplaceContent />
-    </Suspense>
+        }
+      >
+        <MarketplaceContent />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
