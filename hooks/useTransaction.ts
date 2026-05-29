@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { toast } from "sonner";
+import { useToast } from "./useToast";
 import { useWallet } from "./useWallet";
 import { rpc, submitTransaction } from "@/lib/stellar/client";
 import * as StellarSdk from "@stellar/stellar-sdk";
@@ -58,11 +58,12 @@ async function pollWithBackoff(hash: string): Promise<string> {
 export function useTransaction() {
   const [state, setState] = useState<TxState>({ status: "idle" });
   const { signTransaction } = useWallet();
+  const toast = useToast();
 
   const setStage = (status: TxLifecycleStatus, extra?: Partial<TxState>) => {
     setState((s) => ({ ...s, status, ...extra }));
     if (status !== "idle" && status !== "confirmed" && status !== "failed") {
-      toast.loading(STAGE_MESSAGES[status], { id: TOAST_ID });
+      toast.loading(STAGE_MESSAGES[status], TOAST_ID);
     }
   };
 
@@ -118,21 +119,19 @@ export function useTransaction() {
 
         // 6. Confirmed
         setState({ status: "confirmed", txHash: hash });
-        toast.success(options?.successMessage ?? "Transaction confirmed!", {
-          id: TOAST_ID,
-          description: `Hash: ${hash.slice(0, 16)}…`,
-        });
+        toast.success(options?.successMessage ?? "Transaction confirmed!", hash, TOAST_ID);
 
         options?.onSuccess?.(hash);
         return hash;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Transaction failed";
         setState({ status: "failed", error: message });
-        toast.error("Transaction failed", {
-          id: TOAST_ID,
-          description: message,
-          action: { label: "Retry", onClick: () => setState({ status: "idle" }) },
-        });
+        toast.error(
+          "Transaction failed",
+          message,
+          () => setState({ status: "idle" }),
+          TOAST_ID
+        );
         options?.onError?.(err);
         return null;
       }

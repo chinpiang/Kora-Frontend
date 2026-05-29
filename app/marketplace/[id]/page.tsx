@@ -36,9 +36,9 @@ import {
   formatDate,
   formatRelativeDate,
   daysUntil,
-  STATUS_COLORS,
   cn,
 } from "@/lib/utils";
+import { InvoiceStatusBadge } from "@/components/invoice/InvoiceStatusBadge";
 import { validateRouteId, safeIpfsUrl, safeExternalUrl, safeStellarTxUrl } from "@/lib/security";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 
@@ -190,9 +190,7 @@ Stellar Testnet Transaction Hash: ${txHash}`);
                   <div className="flex flex-col items-end gap-2">
                     <RiskBadge tier={riskTier} />
                     <div className="flex items-center gap-2">
-                      <span className={cn("rounded-md px-2 py-0.5 text-xs capitalize", STATUS_COLORS[status])}>
-                        {status.replace(/_/g, " ")}
-                      </span>
+                      <InvoiceStatusBadge status={status} />
                       {funding && (
                         <span className="rounded-md bg-yellow-600/20 px-2 py-0.5 text-[11px] text-yellow-300">
                           Pending confirmation
