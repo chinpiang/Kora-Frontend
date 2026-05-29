@@ -4,9 +4,9 @@ import { useState } from "react";
 import { ChevronDown, LogOut, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/CopyButton";
+import { StellarAddress } from "@/components/ui/stellar-address";
 import { useWallet } from "@/hooks/useWallet";
 import { useUIStore } from "@/store";
-import { shortenAddress } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { safeStellarAccountUrl } from "@/lib/security";
 
@@ -34,7 +34,7 @@ export function WalletButton() {
         )}
       >
         <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-        <span className="font-mono text-xs">{shortenAddress(address!)}</span>
+        <StellarAddress address={address!} chars={4} size="sm" showCopy={false} className="text-foreground" />
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
       </button>
 

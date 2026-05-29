@@ -23,9 +23,11 @@ function ThemedToaster() {
     <Toaster
       theme={theme}
       position="bottom-right"
+      style={{ zIndex: 99999 }}
       toastOptions={{
+        duration: 4000,
         classNames: {
-          toast: "bg-card border border-border text-foreground",
+          toast: "bg-card border border-border text-foreground z-[99999]",
           description: "text-muted-foreground",
         },
       }}

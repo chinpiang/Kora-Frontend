@@ -141,10 +141,12 @@ export function daysUntil(dateStr: string): number {
   return differenceInDays(new Date(dateStr), new Date());
 }
 
-/** Shorten a Stellar address for display */
-export function shortenAddress(address: string, chars = 4): string {
+/** Shorten a Stellar address/hash for display */
+export function truncateAddress(address: string | null | undefined, chars = 4): string {
   if (!address) return "";
-  return `${address.slice(0, chars + 1)}...${address.slice(-chars)}`;
+  const clean = address.trim();
+  if (clean.length <= chars * 2) return clean;
+  return `${clean.slice(0, chars)}...${clean.slice(-chars)}`;
 }
 
 /** Convert stroops to XLM */

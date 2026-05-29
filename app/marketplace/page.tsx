@@ -15,6 +15,7 @@ import {
   Clock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
@@ -76,102 +77,7 @@ const SORT_OPTIONS = [
 
 // ─── Custom UI Controls ──────────────────────────────────────────────────────
 
-// 1. Custom Multi-Select Dropdown with Badges
-function MultiSelect({
-  label,
-  options,
-  selected,
-  onChange,
-  placeholder = "Select options...",
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  selected: string[];
-  onChange: (val: string[]) => void;
-  placeholder?: string;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
-
-  const toggleOption = (val: string) => {
-    if (selected.includes(val)) {
-      onChange(selected.filter((item) => item !== val));
-    } else {
-      onChange([...selected, val]);
-    }
-  };
-
-  const removeOption = (val: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange(selected.filter((item) => item !== val));
-  };
-
-  return (
-    <div ref={containerRef} className="flex flex-col gap-2 relative w-full">
-      <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-        {label}
-      </label>
-      <div
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex min-h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-sm text-foreground transition-colors hover:border-zinc-700"
-      >
-        <div className="flex flex-wrap gap-1 max-w-[90%]">
-          {selected.length === 0 ? (
-            <span className="text-zinc-500">{placeholder}</span>
-          ) : (
-            selected.map((val) => {
-              const labelText = options.find((o) => o.value === val)?.label || val;
-              return (
-                <span
-                  key={val}
-                  className="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-0.5 text-xs font-medium text-zinc-200 border border-zinc-700 transition-all hover:bg-zinc-750"
-                >
-                  {labelText}
-                  <button
-                    type="button"
-                    onClick={(e) => removeOption(val, e)}
-                    className="rounded-full hover:bg-zinc-750 p-0.5 text-zinc-400 hover:text-zinc-200"
-                  >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </span>
-              );
-            })
-          )}
-        </div>
-        <ChevronDown className="h-4 w-4 text-zinc-500 shrink-0" />
-      </div>
-
-      {isOpen && (
-        <div className="absolute top-[100%] left-0 z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-1 shadow-2xl backdrop-blur-md">
-          {options.map((opt) => {
-            const isSelected = selected.includes(opt.value);
-            return (
-              <div
-                key={opt.value}
-                onClick={() => toggleOption(opt.value)}
-                className="flex cursor-pointer items-center justify-between rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100 transition-colors"
-              >
-                <span>{opt.label}</span>
-                {isSelected && <Check className="h-4 w-4 text-primary" />}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // 2. Custom Checkbox Group for Risk Tiers
 function CheckboxGroup({
@@ -556,21 +462,25 @@ function MarketplaceContent() {
   const renderFiltersList = () => (
     <div className="flex flex-col gap-6">
       {/* Category Multi-select */}
-      <MultiSelect
+      <Select
         label="Categories"
         options={CATEGORY_OPTIONS}
-        selected={filters.categories || []}
+        value={filters.categories || []}
         onChange={(val) => updateSingleFilter("categories", val)}
         placeholder="All Categories"
+        isMulti={true}
+        isSearchable={true}
       />
 
       {/* Jurisdiction Multi-select */}
-      <MultiSelect
+      <Select
         label="Jurisdictions"
         options={JURISDICTION_OPTIONS}
-        selected={filters.jurisdictions || []}
+        value={filters.jurisdictions || []}
         onChange={(val) => updateSingleFilter("jurisdictions", val)}
         placeholder="All Jurisdictions"
+        isMulti={true}
+        isSearchable={true}
       />
 
       {/* Risk Tiers Checkbox Group */}

@@ -14,9 +14,9 @@ import {
   formatCurrency,
   formatApr,
   daysUntil,
-  STATUS_COLORS,
   cn,
 } from "@/lib/utils";
+import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
 import type { Invoice } from "@/types";
 
 interface InvoiceCardProps {
@@ -110,14 +110,7 @@ export function InvoiceCard({ invoice, index = 0, updatedAt }: InvoiceCardProps)
                   {formatApr(terms.apr)}
                 </Badge>
               </div>
-              <span
-                className={cn(
-                  "rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                  STATUS_COLORS[status]
-                )}
-              >
-                {status.replace(/_/g, " ")}
-              </span>
+              <InvoiceStatusBadge status={status} />
             </div>
           </div>
 

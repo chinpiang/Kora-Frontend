@@ -27,9 +27,9 @@ import {
   formatCurrency,
   formatDate,
   formatApr,
-  STATUS_COLORS,
   cn,
 } from "@/lib/utils";
+import { InvoiceStatusBadge } from "@/components/invoice/InvoiceStatusBadge";
 import type { Invoice } from "@/types";
 import type { ColumnDef } from "@/types/table";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -192,9 +192,7 @@ export default function SMEDashboardPage() {
                   header: "Status",
                   accessor: (row) => row.status,
                   cell: (row) => (
-                    <span className={cn("rounded-md px-2 py-0.5 text-xs capitalize", STATUS_COLORS[row.status])}>
-                      {row.status.replace(/_/g, " ")}
-                    </span>
+                    <InvoiceStatusBadge status={row.status} />
                   ),
                 },
                 {
