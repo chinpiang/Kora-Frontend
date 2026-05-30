@@ -20,6 +20,8 @@ import { prepareClaimPosition } from "@/services/invoiceService";
 import { MOCK_INVOICES } from "@/services/mockData";
 import { RiskBadge } from "@/components/ui/badge";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
+import { YieldProjectionCalculator } from "@/components/dashboard/YieldProjectionCalculator";
+import { DebtorDisplay } from "@/components/invoice/DebtorDisplay";
 import {
   formatCurrency,
   formatDate,
@@ -211,7 +213,7 @@ export default function InvestorDashboardPage() {
       id: "debtor",
       header: "Debtor",
       accessor: (row) => row.invoice.metadata.debtorName,
-      cell: (row) => <span className="text-muted-foreground">{row.invoice.metadata.debtorName}</span>,
+      cell: (row) => <DebtorDisplay invoice={row.invoice} isFunded={true} />,
     },
     {
       id: "invested",
@@ -313,6 +315,10 @@ export default function InvestorDashboardPage() {
             <StatCard {...stat} />
           </motion.div>
         ))}
+      </div>
+
+      <div className="mb-8">
+        <YieldProjectionCalculator />
       </div>
 
       <Card>
