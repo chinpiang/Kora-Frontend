@@ -25,10 +25,12 @@ import { Skeleton, InvoiceDetailSkeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useInvoice } from "@/hooks/useInvoices";
 import { useWallet } from "@/hooks/useWallet";
+import { usePositions } from "@/hooks/usePositions";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useUIStore, useInvoiceStore } from "@/store";
 import { prepareFundInvoice } from "@/services/invoiceService";
 import { Badge, RiskBadge } from "@/components/ui/badge";
+import ShareInvoiceButton from "@/components/invoice/ShareInvoiceButton";
 import { MOCK_INVOICES } from "@/services/mockData";
 import {
   formatCurrency,
@@ -38,7 +40,10 @@ import {
   daysUntil,
   cn,
 } from "@/lib/utils";
+import CountdownTimer from "@/components/ui/CountdownTimer";
 import { InvoiceStatusBadge } from "@/components/invoice/InvoiceStatusBadge";
+import { DebtorDisplay } from "@/components/invoice/DebtorDisplay";
+import { InvoiceMetadataViewer } from "@/components/invoice/InvoiceMetadataViewer";
 import { validateRouteId, safeIpfsUrl, safeExternalUrl, safeStellarTxUrl } from "@/lib/security";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { env } from "@/lib/env";
@@ -48,6 +53,7 @@ export default function InvoiceDetailPage() {
   const id = validateRouteId(params.id) ?? "";
   const { data: invoice, isLoading, dataUpdatedAt } = useInvoice(id);
   const { isConnected, address } = useWallet();
+  const { data: positions } = usePositions(address ?? undefined);
   const { setWalletModalOpen } = useUIStore();
   const { execute } = useTransaction();
   const queryClient = useQueryClient();
@@ -59,6 +65,9 @@ export default function InvoiceDetailPage() {
 
   if (!id || isLoading) return <InvoiceDetailSkeleton />;
   if (!invoice) return notFound();
+
+  // Post-fund reveal check
+  const isFunded = positions?.some((p) => p.invoiceId === id) || !!fundTxHash;
 
   const { metadata, terms, funding: fundingState, riskTier, status } = invoice;
   const days = daysUntil(terms.repaymentDate);
@@ -107,6 +116,7 @@ export default function InvoiceDetailPage() {
       () => prepareFundInvoice(invoice.tokenId, amountNum, address!),
       {
         successMessage: "Invoice funded successfully!",
+        successNotificationType: "invoiceFunded",
         onSuccess: (txHash) => {
           // DoD Requirement: Clear instructions and trace of exposes final txHash to developer console
           console.log(`[Stellar/Soroban Factoring ESCROW Confirmation]
@@ -191,15 +201,16 @@ Stellar Testnet Transaction Hash: ${txHash}`);
             <Card>
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs text-zinc-500">{metadata.invoiceNumber}</p>
-                    <h1 className="mt-1 text-xl font-bold text-zinc-100">{metadata.debtorName}</h1>
-                    <p className="mt-0.5 text-sm text-zinc-500">{metadata.issuerName}</p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{metadata.invoiceNumber}</p>
+                    <DebtorDisplay invoice={invoice} isFunded={isFunded} className="mt-1" />
+                    <p className="mt-1.5 text-sm font-medium text-zinc-500">{metadata.issuerName}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <RiskBadge tier={riskTier} />
                     <div className="flex items-center gap-2">
                       <InvoiceStatusBadge status={status} />
+                      <ShareInvoiceButton id={id} invoiceTitle={metadata.invoiceNumber} summary={metadata.description} />
                       {funding && (
                         <span className="rounded-md bg-yellow-600/20 px-2 py-0.5 text-[11px] text-yellow-300">
                           Pending confirmation
@@ -212,14 +223,6 @@ Stellar Testnet Transaction Hash: ${txHash}`);
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="flex items-center gap-2 text-sm text-zinc-400">
-                    <Building2 className="h-4 w-4 text-zinc-600" />
-                    <span>{metadata.debtorAddress}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-zinc-400">
-                    <MapPin className="h-4 w-4 text-zinc-600" />
-                    <span>{metadata.jurisdiction} · {metadata.category}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-zinc-400">
                     <Calendar className="h-4 w-4 text-zinc-600" />
                     <span>Issued {formatDate(metadata.issueDate)}</span>
                   </div>
@@ -229,7 +232,7 @@ Stellar Testnet Transaction Hash: ${txHash}`);
                   </div>
                 </div>
                 {metadata.description && (
-                  <p className="mt-4 text-sm text-zinc-500">{metadata.description}</p>
+                  <p className="mt-4 text-sm text-zinc-500 leading-relaxed">{metadata.description}</p>
                 )}
                 {metadata.documentUrl && (
                   <a
@@ -263,7 +266,7 @@ Stellar Testnet Transaction Hash: ${txHash}`);
                     { label: "Repayment Date", value: formatDate(terms.repaymentDate) },
                     { label: "Min Investment", value: formatCurrency(terms.minInvestment, metadata.currency, true) },
                     { label: "Max Investment", value: formatCurrency(terms.maxInvestment, metadata.currency, true) },
-                    { label: "Days Remaining", value: days > 0 ? `${days} days` : "Overdue" },
+                    { label: "Days Remaining", value: <CountdownTimer targetDate={terms.repaymentDate} compact={false} /> },
                   ].map(({ label, value, highlight }) => (
                     <div key={label} className="rounded-lg bg-zinc-800/50 p-3">
                       <p className="text-xs text-zinc-500">{label}</p>
@@ -347,7 +350,7 @@ Stellar Testnet Transaction Hash: ${txHash}`);
                          />
                          {!iframeLoaded && !iframeError && (
                            <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/50">
-                             <InvoiceDetailSkeleton className="h-[450px] w-full" />
+                             <InvoiceDetailSkeleton />
                            </div>
                          )}
                          {iframeError && (
@@ -371,7 +374,7 @@ Stellar Testnet Transaction Hash: ${txHash}`);
                      <div className="block sm:hidden bg-zinc-900 rounded-lg border border-zinc-800 p-6 text-center">
                        {!iframeLoaded && !iframeError && (
                          <div className="flex flex-col items-center justify-center py-8">
-                           <InvoiceDetailSkeleton className="h-16 w-32" />
+                           <InvoiceDetailSkeleton />
                          </div>
                        )}
                        {iframeError && (
@@ -415,6 +418,11 @@ Stellar Testnet Transaction Hash: ${txHash}`);
                </CardContent>
              </Card>
            </motion.div>
+
+           {/* Metadata Viewer */}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <InvoiceMetadataViewer invoice={invoice} isFunded={isFunded} />
+            </motion.div>
         </div>
 
         {/* ── Right: Fund Panel ─────────────────────────────────────────── */}
@@ -434,7 +442,9 @@ Stellar Testnet Transaction Hash: ${txHash}`);
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Maturity</p>
-                  <p className="text-xl font-bold text-zinc-200 mt-0.5">{daysToMaturity} days</p>
+                  <p className="text-xl font-bold text-zinc-200 mt-0.5"><CountdownTimer targetDate={terms.repaymentDate} compact={false} /></p>
+                  {/* Backwards-compat test hook: keep numeric days for integration tests */}
+                  <div data-testid="days-to-maturity" className="sr-only">{daysToMaturity} days</div>
                 </div>
               </div>
 

@@ -1,10 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, LogOut, ExternalLink } from "lucide-react";
+import { ChevronDown, LogOut, ExternalLink, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { StellarAddress } from "@/components/ui/stellar-address";
+import { NotificationSettings } from "@/components/settings/NotificationSettings";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useWallet } from "@/hooks/useWallet";
 import { useUIStore } from "@/store";
 import { cn } from "@/lib/utils";
@@ -14,6 +22,7 @@ export function WalletButton() {
   const { isConnected, address, balance, disconnectWallet } = useWallet();
   const { setWalletModalOpen } = useUIStore();
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (!isConnected) {
     return (
@@ -69,6 +78,16 @@ export function WalletButton() {
             </a>
             <button
               type="button"
+              onClick={() => {
+                setSettingsOpen(true);
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Bell className="h-3.5 w-3.5" /> Notification settings
+            </button>
+            <button
+              type="button"
               onClick={() => { disconnectWallet(); setOpen(false); }}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
             >
@@ -77,6 +96,18 @@ export function WalletButton() {
           </div>
         </div>
       )}
+
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Notification Settings</DialogTitle>
+            <DialogDescription>
+              Configure toast notifications for transaction and invoice events.
+            </DialogDescription>
+          </DialogHeader>
+          <NotificationSettings />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

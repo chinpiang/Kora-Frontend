@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate, formatPercentage, daysUntil, cn } from "@/lib/utils";
+import CountdownTimer from "@/components/ui/CountdownTimer";
 import type { InvoicePosition, Invoice } from "@/types";
 
 interface YieldTimelineEvent {
@@ -261,10 +262,10 @@ export function PositionDetailDrawer({
                 <Badge
                   variant={
                     position.status === "active"
-                      ? "default"
+                      ? "info"
                       : position.status === "repaid"
-                      ? "secondary"
-                      : "destructive"
+                      ? "success"
+                      : "danger"
                   }
                 >
                   {position.status}

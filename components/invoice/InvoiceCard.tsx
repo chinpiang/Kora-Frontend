@@ -16,8 +16,10 @@ import {
   daysUntil,
   cn,
 } from "@/lib/utils";
-import { useCountdown, formatCountdown } from "@/hooks/useCountdown";
+import useCountdown from "@/hooks/useCountdown";
+import CountdownTimer from "@/components/ui/CountdownTimer";
 import { InvoiceStatusBadge } from "./InvoiceStatusBadge";
+import { DebtorDisplay } from "./DebtorDisplay";
 import type { Invoice } from "@/types";
 
 interface InvoiceCardProps {
@@ -104,10 +106,8 @@ export function InvoiceCard({ invoice, index = 0, updatedAt }: InvoiceCardProps)
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                {metadata.debtorName}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              <DebtorDisplay invoice={invoice} className="group-hover:text-primary transition-colors" />
+              <p className="mt-1 truncate text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
                 {metadata.invoiceNumber}
               </p>
             </div>
@@ -118,7 +118,7 @@ export function InvoiceCard({ invoice, index = 0, updatedAt }: InvoiceCardProps)
                   {formatApr(terms.apr)}
                 </Badge>
                 {isExpired && (
-                  <Badge variant="secondary" className="font-semibold px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground">
+                  <Badge variant="default" className="font-semibold px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground">
                     Expired
                   </Badge>
                 )}
@@ -191,7 +191,7 @@ export function InvoiceCard({ invoice, index = 0, updatedAt }: InvoiceCardProps)
               ) : (
                 <>
                   <Calendar className="h-3 w-3" />
-                  {countdown.isExpired ? "Due" : formatCountdown(countdown)}
+                  <CountdownTimer targetDate={listingExpiry} compact className="ml-1" />
                 </>
               )}
             </span>

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea, NumberInput, DatePicker, FileInput, Select } from "@/components/ui";
 import { GlassCard } from "@/components/ui/card";
 import { useWallet } from "@/hooks/useWallet";
+import { useWalletStore } from "@/store";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useUIStore, useInvoiceStore } from "@/store";
 import { prepareCreateInvoice } from "@/services/invoiceService";
@@ -60,6 +61,12 @@ const CATEGORY_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
+const PRIVACY_OPTIONS = [
+  { value: "full", label: "Full (Name + Address)" },
+  { value: "partial", label: "Partial (Name Only)" },
+  { value: "anonymized", label: "Anonymized (Industry + Country)" },
+];
+
 export default function CreateInvoicePage() {
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<File | null>(null);
@@ -95,6 +102,7 @@ export default function CreateInvoicePage() {
       issueDate: TODAY,
       jurisdiction: "KE",
       category: "technology",
+      debtorPrivacy: "full",
       ...createDraft,
     },
   });
@@ -390,12 +398,35 @@ export default function CreateInvoicePage() {
                   error={errors.debtorName?.message}
                   {...register("debtorName")}
                 />
-                <Input
-                  label="Debtor Address"
-                  placeholder="123 Business St, City, Country"
-                  error={errors.debtorAddress?.message}
-                  {...register("debtorAddress")}
-                />
+                <div>
+                  <Input
+                    label="Debtor Address"
+                    placeholder="123 Business St, City, Country"
+                    error={errors.debtorAddress?.message}
+                    list="address-book-list"
+                    {...register("debtorAddress")}
+                  />
+                  <datalist id="address-book-list">
+                    {useWalletStore.getState().addressBook.map((e) => (
+                      <option key={e.id} value={e.address}>{e.label || e.address}</option>
+                    ))}
+                  </datalist>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = (document.querySelector('input[name="debtorAddress"]') as HTMLInputElement)?.value;
+                        if (!val) return alert("No address to save");
+                        if (!/^G[A-Z2-7]{55}$/i.test(val)) return alert("Invalid Stellar address");
+                        useWalletStore.getState().addAddressBookEntry(val, "");
+                        alert("Saved to address book");
+                      }}
+                      className="rounded-lg px-3 py-1 text-sm"
+                    >
+                      + Add to Address Book
+                    </button>
+                  </div>
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <NumberInput
                     label="Invoice Amount (USDC)"
@@ -436,6 +467,13 @@ export default function CreateInvoicePage() {
                     {...register("category")}
                   />
                 </div>
+
+                <Select
+                  label="Debtor Privacy Level"
+                  options={PRIVACY_OPTIONS}
+                  error={errors.debtorPrivacy?.message}
+                  {...register("debtorPrivacy")}
+                />
 
                 <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/70 p-5 shadow-inner shadow-zinc-950/20">
                   <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">

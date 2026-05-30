@@ -16,6 +16,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useUIStore } from "@/store";
 import { usePositions } from "@/hooks/usePositions";
 import { useTransaction } from "@/hooks/useTransaction";
+import { useMaturityReminder } from "@/hooks/useMaturityReminder";
 import { prepareClaimPosition } from "@/services/invoiceService";
 import { MOCK_INVOICES } from "@/services/mockData";
 import { RiskBadge } from "@/components/ui/badge";
@@ -178,6 +179,23 @@ export default function InvestorDashboardPage() {
   const positionsQuery = usePositions(address ?? undefined, { refetchInterval: 30_000 });
   const { execute } = useTransaction();
 
+  const rawPositions = positionsQuery.data;
+  const positionsData: InvestorPosition[] = rawPositions
+    ? rawPositions.map((p) => ({
+        id: p.invoiceId,
+        invoice: p.invoice,
+        investedAmount: p.investedAmount,
+        expectedReturn: p.expectedReturn,
+        status: p.status as "active" | "repaid",
+      }))
+    : POSITIONS;
+
+  useMaturityReminder(
+    positionsData
+      .filter((position) => position.status === "active")
+      .map((position) => position.invoice)
+  );
+
   if (!isConnected) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
@@ -280,17 +298,6 @@ export default function InvestorDashboardPage() {
     },
   ];
 
-  const rawPositions = positionsQuery.data;
-  const positionsData: InvestorPosition[] = rawPositions
-    ? rawPositions.map((p) => ({
-        id: p.invoiceId,
-        invoice: p.invoice,
-        investedAmount: p.investedAmount,
-        expectedReturn: p.expectedReturn,
-        status: p.status as "active" | "repaid",
-      }))
-    : POSITIONS;
-
   return (
     <ErrorBoundary>
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
@@ -319,13 +326,11 @@ export default function InvestorDashboardPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Active Positions</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Active Positions</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6">
           <DataTable
             data={positionsData}
             columns={POSITION_COLUMNS}
@@ -337,15 +342,14 @@ export default function InvestorDashboardPage() {
             }}
           />
         </CardContent>
-          </Card>
-        </div>
+      </Card>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Allocation by Risk Tier</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Allocation by Risk Tier</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
             {Object.entries(
               POSITIONS.reduce<Record<string, number>>((acc, p) => {
                 acc[p.invoice.riskTier] = (acc[p.invoice.riskTier] || 0) + p.investedAmount;
@@ -393,7 +397,6 @@ export default function InvestorDashboardPage() {
             ))}
           </CardContent>
         </Card>
-        </div>
       </div>
     </div>
     </ErrorBoundary>
