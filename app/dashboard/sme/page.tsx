@@ -30,6 +30,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useSMEInvoices } from "@/hooks/useInvoices";
 import { useTransaction } from "@/hooks/useTransaction";
 import { useUsdcBalance } from "@/hooks/useUsdcBalance";
+import { useMaturityReminder } from "@/hooks/useMaturityReminder";
 import { prepareRepayInvoice } from "@/services/invoiceService";
 import { useUIStore } from "@/store";
 import { MOCK_INVOICES } from "@/services/mockData";
@@ -44,6 +45,7 @@ import { DebtorDisplay } from "@/components/invoice/DebtorDisplay";
 import type { Invoice } from "@/types";
 import type { ColumnDef } from "@/types/table";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import ShareInvoiceButton from "@/components/invoice/ShareInvoiceButton";
 
 
 export default function SMEDashboardPage() {
@@ -64,6 +66,14 @@ export default function SMEDashboardPage() {
     errors: Array<{ id: string; error: string }>;
   } | null>(null);
 
+  const myInvoices: Invoice[] = (invoicesQuery.data || MOCK_INVOICES).filter(
+    (inv: Invoice) => inv.ownerAddress === address
+  );
+
+  useMaturityReminder(
+    myInvoices.filter((invoice) => ["listed", "partially_funded", "fully_funded"].includes(invoice.status))
+  );
+
   if (!isConnected) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
@@ -76,10 +86,6 @@ export default function SMEDashboardPage() {
       </div>
     );
   }
-  const myInvoices: Invoice[] = (invoicesQuery.data || MOCK_INVOICES).filter(
-    (inv: Invoice) => inv.ownerAddress === address
-  );
-
   const STATS = [
     {
       label: "Total Financed",
@@ -88,6 +94,7 @@ export default function SMEDashboardPage() {
         "USDC",
         true
       ),
+      valueRaw: myInvoices.reduce((s, i) => s + i.funding.totalRaised, 0),
       change: "12.4% this month",
       changePositive: true,
       icon: <TrendingUp className="h-4 w-4" />,
@@ -95,6 +102,7 @@ export default function SMEDashboardPage() {
     {
       label: "Active Invoices",
       value: myInvoices.filter((i) => ["listed", "partially_funded", "fully_funded"].includes(i.status)).length.toString(),
+      valueRaw: myInvoices.filter((i) => ["listed", "partially_funded", "fully_funded"].includes(i.status)).length,
       icon: <FileText className="h-4 w-4" />,
     },
     {
@@ -104,6 +112,7 @@ export default function SMEDashboardPage() {
         "USDC",
         true
       ),
+      valueRaw: myInvoices.filter((i) => i.status === "fully_funded").reduce((s, i) => s + i.metadata.amount, 0),
       icon: <Clock className="h-4 w-4" />,
     },
     {
@@ -119,6 +128,7 @@ export default function SMEDashboardPage() {
     if (!address) return;
     await execute(() => prepareRepayInvoice(inv.tokenId, address), {
       successMessage: "Yield distributed to investors",
+      successNotificationType: "yieldAvailable",
       onSuccess: () => {
         invoicesQuery.refetch();
         setRepayTarget(null);
@@ -332,9 +342,12 @@ export default function SMEDashboardPage() {
                             Cancel
                           </Button>
                         )}
-                        <Link href={`/marketplace/${row.id}`} className="text-xs text-primary hover:opacity-80">
-                          View →
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <ShareInvoiceButton id={row.id} invoiceTitle={row.metadata.invoiceNumber} summary={row.metadata.description} />
+                          <Link href={`/marketplace/${row.id}`} className="text-xs text-primary hover:opacity-80">
+                            View →
+                          </Link>
+                        </div>
                       </div>
                     );
                   },

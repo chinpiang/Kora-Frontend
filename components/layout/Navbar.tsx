@@ -15,7 +15,10 @@ import {
   History,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+const AddressBook = dynamic(() => import("@/components/wallet/AddressBook").then((m) => m.AddressBook), { ssr: false });
 import { WalletButton } from "@/components/wallet/WalletButton";
+import { NetworkStatusIndicator } from "@/components/layout/NetworkStatusIndicator";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +38,7 @@ export function Navbar() {
   const theme = useUIStore((s) => s.theme);
   const toggleTheme = useUIStore((s) => s.toggleTheme);
   const navRef = useRef<HTMLElement>(null);
+  const [addressBookOpen, setAddressBookOpen] = useState(false);
 
   // Close on route change
   useEffect(() => {
@@ -111,6 +115,7 @@ export function Navbar() {
 
         {/* Right side controls */}
         <div className="flex items-center gap-3">
+          <NetworkStatusIndicator />
           <button
             type="button"
             onClick={toggleTheme}
@@ -126,6 +131,7 @@ export function Navbar() {
             )}
           </button>
 
+          <button onClick={() => setAddressBookOpen(true)} className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Address Book</button>
           <WalletButton />
 
           {/* Hamburger — mobile only */}
@@ -187,6 +193,7 @@ export function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
+      {addressBookOpen && <AddressBook onClose={() => setAddressBookOpen(false)} />}
     </header>
   );
 }
