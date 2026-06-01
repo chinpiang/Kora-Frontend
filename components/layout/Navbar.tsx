@@ -22,6 +22,7 @@ const TransactionHistoryDrawer = dynamic(
   { ssr: false }
 );
 import { WalletButton } from "@/components/wallet/WalletButton";
+import { NetworkStatusIndicator } from "@/components/layout/NetworkStatusIndicator";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/lib/utils";
 
@@ -139,6 +140,7 @@ export function Navbar() {
 
         {/* Right side controls */}
         <div className="flex items-center gap-3">
+          <NetworkStatusIndicator />
           <button
             type="button"
             onClick={toggleTheme}
